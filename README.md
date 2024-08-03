@@ -1,6 +1,6 @@
 # Benplusplus
 
-**TODO: Add description**
+A new horizon of revolutionary programming languages is upon us. Don't be benhind the curve, be benhead of it.
 
 ## Installation
 
