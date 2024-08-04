@@ -4,6 +4,8 @@ defmodule Mix.Tasks.Execute do
   @impl Mix.Task
   def run(args) do
     IO.puts("Executing code given")
-    IO.puts(Benplusplus.Execute.expression(hd args))
+    input = hd(args)
+    tokens = Benplusplus.Lexer.tokenise(input)
+    IO.puts(Benplusplus.Lexer.pretty_print(tokens))
   end
 end
