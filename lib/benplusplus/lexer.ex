@@ -6,9 +6,15 @@ defmodule Benplusplus.Lexer do
     {"\\/", :divide},
     {"-", :minus},
     {"\\+", :plus},
+    {"==", :assignment},
     {"=", :equals},
+    {":", :colon},
     {"\\(", :left_paren},
-    {"\\)", :left_paren},
+    {"\\)", :right_paren},
+    {"\\[", :left_square},
+    {"\\]", :right_square},
+    {"\\{", :left_curly},
+    {"\\}", :right_curly},
     {"[ \t\r\n]+", :whitespace}
   ]
 
