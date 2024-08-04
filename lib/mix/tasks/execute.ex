@@ -3,6 +3,7 @@ defmodule Mix.Tasks.Execute do
 
   @impl Mix.Task
   def run(args) do
-    IO.puts(Benplusplus.expression(hd args))
+    IO.puts("Executing code given")
+    IO.puts(Benplusplus.Execute.expression(hd args))
   end
 end
