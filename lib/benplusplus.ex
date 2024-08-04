@@ -9,12 +9,12 @@ defmodule Benplusplus do
   defp token(chars, acc \\ [], num \\ "") do
     case chars do
       [] ->
-        [acc | [String.to_integer(num)]]
+        [String.to_integer(num) | acc]
 
       [char | rest] ->
         cond do
           char in ["+", "-", "*", "/"] ->
-            token(rest, [acc| [String.to_integer(num), char]], "")
+            token(rest, [char, String.to_integer(num) | acc], "")
           true ->
             token(rest, acc, num <> char)
         end
@@ -33,7 +33,7 @@ defmodule Benplusplus do
     ans = case operator do
       "+" -> result + num
       "-" -> result - num
-      "/" -> div(result, num)
+      "/" -> div(num, result)
       "*" -> result * num
     end
     evaluate(rest, ans)
