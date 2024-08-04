@@ -1,5 +1,7 @@
 defmodule Benplusplus.Execute do
   def expression(str) do
+    IO.puts("Doing #{Benplusplus.Otherfile.doThingy()}?")
+
     str
     |> String.graphemes()
     |> token()
