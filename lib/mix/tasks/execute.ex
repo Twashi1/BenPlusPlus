@@ -3,9 +3,26 @@ defmodule Mix.Tasks.Execute do
 
   @impl Mix.Task
   def run(args) do
-    IO.puts("Executing code given")
-    input = hd(args)
-    tokens = Benplusplus.Lexer.tokenise(input)
+    {parsed, _, _} = OptionParser.parse(args, switches: [file: :string, code: :string])
+    IO.inspect(parsed, label: "Received args")
+
+    code = parsed[:code]
+
+    tokens = case code do
+      nil ->
+        filepath = parsed[:file]
+        IO.puts("Reading file #{filepath}")
+
+        # Load filepath and set to code
+        {status, filedata} = File.read(filepath)
+
+      case status do
+        :ok -> Benplusplus.Lexer.tokenise(filedata)
+        :error -> raise("Couldn't load file, couldn't load code")
+      end
+      _ -> Benplusplus.Lexer.tokenise(code)
+    end
+
     IO.puts(Benplusplus.Lexer.pretty_print(tokens))
   end
 end
