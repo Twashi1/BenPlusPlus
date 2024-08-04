@@ -1,0 +1,20 @@
+a == int == 5:
+b == int == a + 3:
+b == b + 1:
+
+int, float, char, string, list
+
+c == list == int == (0, 1, 2, 3):
+firstbenValue == 1 @ c: | value is 3, because lists get reverse and its one-indexed |
+
+perhaps a = 5 [
+
+] otherwise perhaps a = 3 [
+
+]
+
+benchen fibenacci{first == int, second == int, third == int} [
+
+]
+
+{1, 2, 3}fibenacci:
