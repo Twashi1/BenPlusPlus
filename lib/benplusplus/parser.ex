@@ -33,41 +33,6 @@ defmodule Benplusplus.Parser do
     end
   end
 
-  defp visit(head) do
-    case head do
-      {:number, number} -> Benplusplus.Node.construct_node(:number, number)
-      {:binop, lhs, rhs, op} ->
-        IO.inspect(lhs, label: "Left node")
-        IO.inspect(rhs, label: "Right node")
-
-        { :number, lhs_value } = visit(lhs)
-        { :number, rhs_value } = visit(rhs)
-
-        IO.inspect(lhs_value, label: "Visit left returned")
-        IO.inspect(rhs_value, label: "Visit right returned")
-
-        case op do
-          :plus ->      Benplusplus.Node.construct_node(:number, lhs_value + rhs_value)
-          :minus ->     Benplusplus.Node.construct_node(:number, lhs_value - rhs_value)
-          :multiply ->  Benplusplus.Node.construct_node(:number, lhs_value * rhs_value)
-          :divide ->    Benplusplus.Node.construct_node(:number, div(lhs_value, rhs_value))
-          _ -> raise("Expected mathematical operator +-*/, got #{op}")
-        end
-      _ -> raise("Unexpected visit type")
-    end
-  end
-
-  def tmp_evalute(token_stream) do
-    { ast_head, _ } = expression(token_stream, :expression)
-
-    evaluted = visit(ast_head)
-
-    case evaluted do
-      {:number, number} -> number
-      _ -> raise("Evalute returned #{evaluted} instead of number")
-    end
-  end
-
   defp expression(token_stream, :value) do
     precedence_value(token_stream)
   end
