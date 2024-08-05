@@ -24,5 +24,8 @@ defmodule Mix.Tasks.Execute do
     end
 
     IO.puts(Benplusplus.Lexer.pretty_print(tokens))
+
+    result = Benplusplus.Parser.tmp_evalute(tokens)
+    IO.puts("Result of evalutation: #{result}")
   end
 end
