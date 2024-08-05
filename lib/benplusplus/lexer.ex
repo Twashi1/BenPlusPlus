@@ -1,5 +1,11 @@
 defmodule Benplusplus.Lexer do
   @tokens [
+    {"perhaps", :if},
+    {"otherwise perhaps", :elif},
+    {"otherwise", :else},
+    {"int", :int},
+    {"string", :string},
+    {"char", :char},
     {"[a-zA-Z_][a-zA-Z0-9_]*", :identifiers},
     {"[0-9]+", :number},
     {"\\*", :multiply},
