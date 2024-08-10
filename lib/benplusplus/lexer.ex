@@ -6,7 +6,7 @@ defmodule Benplusplus.Lexer do
     {"int", :int},
     {"string", :string},
     {"char", :char},
-    {"[a-zA-Z_][a-zA-Z0-9_]*", :identifiers},
+    {"[a-zA-Z_][a-zA-Z0-9_]*", :identifier},
     {"[0-9]+", :number},
     {"\\*", :multiply},
     {"\\/", :divide},
