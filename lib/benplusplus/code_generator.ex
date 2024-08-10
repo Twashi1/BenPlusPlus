@@ -15,22 +15,31 @@ defmodule Benplusplus.Codegenerator do
     end
   end
 
+  defp push_to_stack() do
+    ["addi sp, sp, -4"] ++ ["sw t0, 0(sp)"]
+  end
+
+  defp pop_from_stack() do
+    ["lw t0 0(sp)"] ++ ["addi sp, sp, 4"]
+  end
+
   defp generate_code(:number, number) do
-    ["li t0, #{number}"]
+    ["addi t0, zero, #{number}"] ++ push_to_stack()
   end
 
   defp generate_code(:binop, left, right, op_atom) do
+    # Push two numbers to stack
     left_code = generate_code(left)
     right_code = generate_code(right)
 
     operation_code = case op_atom do
       :plus -> "add t0, t0, t1"
-      :minus -> "sub t0, t1, t0"
+      :minus -> "sub t0, t0, t1"
       :multiply -> "mul t0, t0, t1"
-      :divide -> "div t0, t1, t0"
+      :divide -> "div t0, t0, t1"
       _ -> raise("Expected mathematical operator +-*/, got #{op_atom}")
     end
 
-    left_code ++ ["mv t1, t0"] ++ right_code ++ [operation_code]
+    left_code ++ right_code ++ pop_from_stack() ++ ["mv t1, t0"] ++ pop_from_stack() ++ [operation_code] ++ push_to_stack()
   end
 end
