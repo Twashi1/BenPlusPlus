@@ -1,4 +1,7 @@
 defmodule Benplusplus.Lexer do
+  # TODO: Switch to making the IO list store regex patterns instead of strings representing regex patterns
+  @type token() :: {String.t(), atom()}
+
   @tokens [
     {"perhaps", :if},
     {"otherwise perhaps", :elif},
@@ -38,7 +41,7 @@ defmodule Benplusplus.Lexer do
     end)
 
     [match] = Regex.run(~r/^#{matched}/, input)
-    rest = String.slice(input, String.length(match), String.length(input)-String.length(match))
+    rest = String.slice(input, String.length(match), String.length(input) - String.length(match))
 
     case type do
       :whitespace -> tokenise(rest, tokens)
@@ -46,10 +49,11 @@ defmodule Benplusplus.Lexer do
     end
   end
 
-  def pretty_print(tokens) do
-    tokens
-    |> Enum.map(fn {type, value} -> "#{type}: #{value}" end)
-    |> Enum.join("\n")
-  end
+  def pretty_print_tokens(tokens) do
+    res = tokens
+    |> Enum.map(fn {type, value} -> "#{type}: '#{value}'" end)
+    |> Enum.join(", ")
 
+    "[#{res}]"
+  end
 end

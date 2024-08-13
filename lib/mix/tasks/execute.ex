@@ -23,11 +23,11 @@ defmodule Mix.Tasks.Execute do
       _ -> Benplusplus.Lexer.tokenise(code)
     end
 
-    IO.puts(Benplusplus.Lexer.pretty_print(tokens))
+    IO.puts(Benplusplus.Lexer.pretty_print_tokens(tokens))
 
     ast_root = Benplusplus.Parser.parse(tokens)
 
-    IO.puts("AST: #{Benplusplus.Parser.prettyprint(ast_root)}")
+    IO.puts("AST: #{Benplusplus.Parser.pretty_print_node(ast_root)}")
 
     context = %Benplusplus.Codegenerator.Context{}
 

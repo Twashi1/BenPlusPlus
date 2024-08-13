@@ -1,4 +1,7 @@
 defmodule Benplusplus.Parser do
+  @type precedence() :: :add_sub | :multiply_divide | :expression
+
+  @spec higher_precedence(precedence()) :: precedence()
   defp higher_precedence(precedence_level) do
     case precedence_level do
       :add_sub -> :value
@@ -7,29 +10,29 @@ defmodule Benplusplus.Parser do
     end
   end
 
+  @spec parse(list(Benplusplus.Lexer.token())) :: Benplusplus.Node.node_compound()
   def parse(token_stream) do
-    IO.puts("Parsing compound")
-    { statementList, stack_size } = parse_compound(token_stream)
-
-    Benplusplus.Node.construct_compound(statementList, stack_size)
+    parse_compound(token_stream)
   end
 
-  def pp_statement_list(root) do
-    case root do
+  @spec pretty_print_statements(list(Benplusplus.Node.astnode())) :: String.t()
+  def pretty_print_statements(statements) do
+    case statements do
       :nil -> ":nil"
       [] -> ""
-      [head | tail] -> "#{prettyprint(head)}, #{pp_statement_list(tail)}"
+      [head | tail] -> "#{pretty_print_node(head)}, #{pretty_print_statements(tail)}"
     end
   end
 
-  def prettyprint(root) do
+  @spec pretty_print_node(Benplusplus.Node.astnode()) :: String.t()
+  def pretty_print_node(root) do
     case root do
       {:number, value} -> "<Number: #{value}>"
-      {:binop, left, right, char} -> "<Binop, op: #{char}, LHS: #{prettyprint(left)}, RHS: #{prettyprint(right)}>"
+      {:binop, left, right, char} -> "<Binop, op: #{char}, LHS: #{pretty_print_node(left)}, RHS: #{pretty_print_node(right)}>"
       {:var, name} -> "<Var: #{name}>"
-      {:vardecl, type, identifier, expression} -> "<Declaration(#{prettyprint(type)}): var: #{prettyprint(identifier)}, val: #{prettyprint(expression)}>"
-      {:assign, var, rhs} -> "<Assign, var: #{prettyprint(var)}, val: #{prettyprint(rhs)}>"
-      {:compound, nodes, stack_size} -> "<Compound(size:#{stack_size}), values: [#{pp_statement_list(nodes)}]>"
+      {:vardecl, type, identifier, expression} -> "<Declaration(#{pretty_print_node(type)}): var: #{pretty_print_node(identifier)}, val: #{pretty_print_node(expression)}>"
+      {:assign, var, rhs} -> "<Assign, var: #{pretty_print_node(var)}, val: #{pretty_print_node(rhs)}>"
+      {:compound, nodes, stack_size} -> "<Compound(size:#{stack_size}), values: [#{pretty_print_statements(nodes)}]>"
       {:type, atom} -> "<Type: #{Atom.to_string(atom)}>"
       _ ->
         IO.inspect(root, label: "Got unknown token type")
@@ -37,24 +40,32 @@ defmodule Benplusplus.Parser do
     end
   end
 
-  def parse_compound(token_stream) do
-    IO.puts("Currently parsing stream: #{Benplusplus.Lexer.pretty_print(token_stream)}")
+  @spec parse_compound(list(Benplusplus.Lexer.token())) :: Benplusplus.Node.node_compound()
+  defp parse_compound(token_stream) do
+    {statements, stack_size} = statement_list(token_stream)
+
+    Benplusplus.Node.construct_compound(statements, stack_size)
+  end
+
+  @spec statement_list(list(Benplusplus.Lexer.token())) :: {list(Benplusplus.Node.astnode()), integer()}
+  defp statement_list(token_stream) do
     case token_stream do
-      [] -> :nil
+      [] -> {[], 0}
       _ ->
         {node, token_stream, stack_required} = statement(token_stream)
         expect(token_stream, :colon)
-        [_colonToken | token_stream] = token_stream
+        [_colon_token | token_stream] = token_stream
 
         case token_stream do
           [] -> { [node], stack_required }
           _ ->
-            { tail_statements, tail_stack } = parse_compound(token_stream)
+            { tail_statements, tail_stack } = statement_list(token_stream)
             { [node | tail_statements], tail_stack + stack_required }
         end
     end
   end
 
+  @spec statement(list(Benplusplus.Lexer.token())) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token()), integer()} | :error
   defp statement(token_stream) do
     [current_token | token_stream] = token_stream
 
@@ -62,6 +73,7 @@ defmodule Benplusplus.Parser do
       {:identifier, value} ->
         var_node = Benplusplus.Node.construct_variable(value)
 
+        # Eat assignment token
         token_stream = expect(token_stream, :assignment)
         [_ | token_stream] = token_stream
 
@@ -71,18 +83,18 @@ defmodule Benplusplus.Parser do
             case token_type do
               # Construct variable declaration
               :int ->
-                IO.puts("Parsing variable declaration for token stream: #{Benplusplus.Lexer.pretty_print(token_stream)}")
+                IO.puts("Parsing variable declaration for token stream: #{Benplusplus.Lexer.pretty_print_tokens(token_stream)}")
                 token_stream = expect(token_stream, :assignment)
                 [_ | token_stream] = token_stream
                 {rhs, token_stream, additional_stack } = expression(token_stream, :expression)
-                IO.puts("Ate all characters, left with: #{Benplusplus.Lexer.pretty_print(token_stream)}")
+                IO.puts("Ate all characters, left with: #{Benplusplus.Lexer.pretty_print_tokens(token_stream)}")
                 { Benplusplus.Node.construct_variable_declaration(Benplusplus.Node.construct_type(:int), var_node, rhs), token_stream, additional_stack + Benplusplus.Node.sizeof_type(:int) }
               # Construct assignment
               _ ->
                 token_stream = [{token_type, token_value} | token_stream]
-                IO.puts("Current stream: #{Benplusplus.Lexer.pretty_print(token_stream)}")
+                IO.puts("Current stream: #{Benplusplus.Lexer.pretty_print_tokens(token_stream)}")
                 {rhs, token_stream, additional_stack } = expression(token_stream, :expression)
-                IO.puts("Got expression: #{prettyprint(rhs)}")
+                IO.puts("Got expression: #{pretty_print_node(rhs)}")
                 { Benplusplus.Node.construct_assignment(var_node, rhs), token_stream, additional_stack }
             end
         end
@@ -90,6 +102,7 @@ defmodule Benplusplus.Parser do
     end
   end
 
+  @spec precedence_value(list(Benplusplus.Lexer.token())) :: Benplusplus.Node.node_number() | Benplusplus.Node.node_var()
   defp precedence_value(token_stream) do
     current_token = hd(token_stream)
 
@@ -105,14 +118,17 @@ defmodule Benplusplus.Parser do
     end
   end
 
+  @spec expression(list(Benplusplus.Lexer.token())) :: Benplusplus.Node.astnode() | :error
   def expression(token_stream) do
     expression(token_stream, :expression)
   end
 
+  @spec expression(list(Benplusplus.Lexer.token()), :value) :: Benplusplus.Node.astnode() | :error
   defp expression(token_stream, :value) do
     precedence_value(token_stream)
   end
 
+  @spec expression(list(Benplusplus.Lexer.token()), precedence()) :: Benplusplus.Node.astnode() | :error
   defp expression(token_stream, precedence_level) do
     { lhs, token_stream, stack_required } = expression(token_stream, higher_precedence(precedence_level))
 
@@ -143,11 +159,14 @@ defmodule Benplusplus.Parser do
     end
   end
 
+  @spec error(String.t()) :: :error
   defp error(message) do
     IO.puts("Parser error: #{message}")
     :error
   end
 
+  # Validates the next token in the stream is of a certain type
+  @spec expect(list(Benplusplus.Lexer.token()), atom()) :: :error | list(Benplusplus.Lexer.token())
   defp expect(token_stream, token_type) do
     case token_stream do
       [] -> error("Expected token #{token_type} but got end of file")

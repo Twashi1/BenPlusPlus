@@ -3,20 +3,21 @@ defmodule Benplusplus.Codegenerator do
     defstruct stack_frames: []
   end
 
+  # Stack of stack frames
+  # On each stack frame, store mapping of variables to their offset from the stack pointer
+  # Store a current stack offset so we can deal with temporaries in each scope
   defmodule StackFrame do
     # Including arena pointer to track how much memory of the stack we've allocated so far
     defstruct size: 0, variable_mapping: %{}, arena_pointer: 0
   end
 
+  @spec error(String.t()) :: :error
   defp error(message) do
     IO.puts("Generator error: #{message}")
     :error
   end
 
-  # Stack of stack frames
-  # On each stack frame, store mapping of variables to their offset from the stack pointer
-  # Store a current stack offset so we can deal with temporaries in each scope
-
+  @spec generate_code(Benplusplus.Node.astnode(), Context) :: {list(String.t()), Context}
   def generate_code(ast_node, context) do
     case ast_node do
       {:number, number} -> generate_code_number(number, context)
@@ -25,10 +26,11 @@ defmodule Benplusplus.Codegenerator do
       {:assign, var, expression} -> generate_code_assign(var, expression, context)
       {:vardecl, type, var, expression} -> generate_code_variable_declaration(type, var, expression, context)
       {:var, var_name} -> generate_code_variable(var_name, context)
-      _ -> {["Unknown: #{Benplusplus.Parser.prettyprint(ast_node)}"], :nil}
+      _ -> {["Unknown: #{Benplusplus.Parser.pretty_print_node(ast_node)}"], context}
     end
   end
 
+  @spec generate_statement_list(list(Benplusplus.Node.astnode()), Context) :: {list(String.t()), Context}
   defp generate_statement_list(statement_list, context) do
     case statement_list do
       [] -> {[], context}
@@ -40,6 +42,7 @@ defmodule Benplusplus.Codegenerator do
     end
   end
 
+  @spec generate_stack_frame(list(Benplusplus.Node.astnode()), StackFrame) :: StackFrame
   defp generate_stack_frame(statement_list, current_stack_frame) do
     case statement_list do
       [] -> current_stack_frame
@@ -58,6 +61,7 @@ defmodule Benplusplus.Codegenerator do
     end
   end
 
+  @spec generate_code_variable(String.t(), Context) :: {list(String.t()), Context}
   defp generate_code_variable(var_name, context) do
     # Load variable into register t0, and push to temporary stack
     # (Context not modified)
@@ -67,6 +71,7 @@ defmodule Benplusplus.Codegenerator do
     {read_var_code ++ write_var_stack, context}
   end
 
+  @spec generate_code_compound(list(Benplusplus.Node.astnode()), integer(), Context) :: {list(String.t()), Context}
   defp generate_code_compound(statement_list, stack_size, context) do
     # Generate stack for size of stack
     stack_create = "addi sp, sp, -#{stack_size}"
@@ -86,6 +91,7 @@ defmodule Benplusplus.Codegenerator do
     {[stack_create] ++ statements ++ [stack_destroy], context}
   end
 
+  @spec generate_code_assign(Benplusplus.Node.node_var(), Benplusplus.Node.astnode(), Context) :: {list(String.t()), Context}
   defp generate_code_assign(var, expression, context) do
     # Calculate value of expression and push to arena_pointer stack
     {expr_code, context} = generate_code(expression, context)
@@ -99,10 +105,13 @@ defmodule Benplusplus.Codegenerator do
   end
 
   # Just a regular assignment call, we could do semantic analysis here with type, but everythings an integer right now
+  @spec generate_code_variable_declaration(Benplusplus.Node.node_type(), Benplusplus.Node.node_var(), Benplusplus.Node.astnode(), Context) :: {list(String.t()), Context}
   defp generate_code_variable_declaration(_type, var, expression, context) do
     generate_code_assign(var, expression, context)
   end
 
+  # Move the arena pointer of the first stack frame by diff
+  @spec modify_arena_context(integer(), Context) :: Context
   defp modify_arena_context(diff, context) do
     # Pop off lowest frame
     [current_frame | tail_frames] = context.stack_frames
@@ -118,12 +127,12 @@ defmodule Benplusplus.Codegenerator do
   end
 
   # Get location of variable taking into account current stack frames
-  # Returns :nil if variable not found
+  @spec get_variable_location(String.t(), list(StackFrame), integer()) :: :error | integer()
   defp get_variable_location(var_name, stack_frames, start_offset \\ 0) do
     IO.inspect(stack_frames, label: "Looking for variable #{var_name} in context")
 
     case stack_frames do
-      [] -> :nil
+      [] -> :error
       [head | tail] ->
         # Look in current stack frame
         case Map.fetch(head.variable_mapping, var_name) do
@@ -135,6 +144,7 @@ defmodule Benplusplus.Codegenerator do
   end
 
   # Reads variable into register t0
+  @spec read_variable(String.t(), Context) :: :error | {list(String.t()), Context}
   defp read_variable(var_name, context) do
     var_location = get_variable_location(var_name, context.stack_frames)
 
@@ -145,6 +155,7 @@ defmodule Benplusplus.Codegenerator do
   end
 
   # Write value from register t0 into variable
+  @spec write_variable(String.t(), Context) :: :error | {list(String.t()), Context}
   defp write_variable(var_name, context) do
     var_location = get_variable_location(var_name, context.stack_frames)
 
@@ -155,12 +166,14 @@ defmodule Benplusplus.Codegenerator do
   end
 
   # Write value of register t0 to stack
+  @spec write_to_stack(Context) :: {list(String.t()), Context}
   defp write_to_stack(context) do
     current_frame = hd(context.stack_frames)
 
     {["sw t0, #{current_frame.arena_pointer}(sp)"], modify_arena_context(4, context)}
   end
 
+  @spec read_from_stack(Context) :: {list(String.t()), Context}
   defp read_from_stack(context) do
     context = modify_arena_context(-4, context)
     current_frame = hd(context.stack_frames)
@@ -168,6 +181,7 @@ defmodule Benplusplus.Codegenerator do
     {["lw t0, #{current_frame.arena_pointer}(sp)"], context}
   end
 
+  @spec generate_code_number(integer(), Context) :: {list(String.t()), Context}
   defp generate_code_number(number, context) do
     # Load number into register t0 and save to stack
     load_number = ["addi t0, zero, #{number}"]
@@ -176,6 +190,7 @@ defmodule Benplusplus.Codegenerator do
     {load_number ++ load_to_stack, context}
   end
 
+  @spec generate_code_binop(Benplusplus.Node.astnode(), Benplusplus.Node.astnode(), Benplusplus.Node.op_atoms(), Context) :: {list(String.t()), Context}
   defp generate_code_binop(left, right, op_atom, context) do
     # Push two numbers to stack
     {left_code, context} = generate_code(left, context)
