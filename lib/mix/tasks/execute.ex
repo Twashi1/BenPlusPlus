@@ -25,11 +25,13 @@ defmodule Mix.Tasks.Execute do
 
     IO.puts(Benplusplus.Lexer.pretty_print(tokens))
 
-    {ast_root, tokens} = Benplusplus.Parser.expression(tokens, :expression)
+    ast_root = Benplusplus.Parser.parse(tokens)
 
     IO.puts("AST: #{Benplusplus.Parser.prettyprint(ast_root)}")
 
-    instructions = Benplusplus.Codegenerator.generate_code(ast_root)
+    context = %Benplusplus.Codegenerator.Context{}
+
+    instructions = Benplusplus.Codegenerator.generate_code(ast_root, context)
 
     IO.inspect(instructions, label: "Instructions: ")
   end
