@@ -120,17 +120,17 @@ defmodule Benplusplus.Parser do
     end
   end
 
-  @spec expression(list(Benplusplus.Lexer.token())) :: Benplusplus.Node.astnode()
+  @spec expression(list(Benplusplus.Lexer.token())) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token()), integer()}
   def expression(token_stream) do
     expression(token_stream, :expression)
   end
 
-  @spec expression(list(Benplusplus.Lexer.token()), :value) :: Benplusplus.Node.astnode()
+  @spec expression(list(Benplusplus.Lexer.token()), :value) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token()), integer()}
   defp expression(token_stream, :value) do
     precedence_value(token_stream)
   end
 
-  @spec expression(list(Benplusplus.Lexer.token()), precedence()) :: Benplusplus.Node.astnode()
+  @spec expression(list(Benplusplus.Lexer.token()), precedence()) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token()), integer()}
   defp expression(token_stream, precedence_level) do
     { lhs, token_stream, stack_required } = expression(token_stream, higher_precedence(precedence_level))
 
