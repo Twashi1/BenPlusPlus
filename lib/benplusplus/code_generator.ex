@@ -30,6 +30,13 @@ defmodule Benplusplus.Codegenerator do
     end
   end
 
+  @spec generate_instructions(Benplusplus.Node.astnode()) :: list(String.t())
+  def generate_instructions(ast_node) do
+    {instructions, _context} = generate_code(ast_node, %Context{})
+
+    instructions
+  end
+
   @spec generate_statement_list(list(Benplusplus.Node.astnode()), Context) :: {list(String.t()), Context}
   defp generate_statement_list(statement_list, context) do
     case statement_list do
@@ -85,10 +92,10 @@ defmodule Benplusplus.Codegenerator do
     {statements, _context} = generate_statement_list(statement_list, new_context)
 
     # Destroy stack
-    stack_destroy = "addi sp, sp, #{stack_size}"
+    stack_destroy = ["addi sp, sp, #{stack_size}"]
 
     # Keeping old context in our return
-    {[stack_create] ++ statements ++ [stack_destroy], context}
+    {[stack_create | statements] ++ stack_destroy, context}
   end
 
   @spec generate_code_assign(Benplusplus.Node.node_var(), Benplusplus.Node.astnode(), Context) :: {list(String.t()), Context}
@@ -127,18 +134,18 @@ defmodule Benplusplus.Codegenerator do
   end
 
   # Get location of variable taking into account current stack frames
-  @spec get_variable_location(String.t(), list(StackFrame), integer()) :: :error | integer()
+  @spec get_variable_location(String.t(), list(StackFrame), integer()) :: :nil | integer()
   defp get_variable_location(var_name, stack_frames, start_offset \\ 0) do
     IO.inspect(stack_frames, label: "Looking for variable #{var_name} in context")
 
     case stack_frames do
-      [] -> :error
+      [] -> :nil
       [head | tail] ->
         # Look in current stack frame
         case Map.fetch(head.variable_mapping, var_name) do
           {:ok, value} ->
             start_offset + value
-          :error -> get_variable_location(var_name, tail, head.size)
+          :nil -> get_variable_location(var_name, tail, head.size)
         end
     end
   end
@@ -184,10 +191,10 @@ defmodule Benplusplus.Codegenerator do
   @spec generate_code_number(integer(), Context) :: {list(String.t()), Context}
   defp generate_code_number(number, context) do
     # Load number into register t0 and save to stack
-    load_number = ["addi t0, zero, #{number}"]
+    load_number = "addi t0, zero, #{number}"
     {load_to_stack, context} = write_to_stack(context)
 
-    {load_number ++ load_to_stack, context}
+    {[load_number | load_to_stack], context}
   end
 
   @spec generate_code_binop(Benplusplus.Node.astnode(), Benplusplus.Node.astnode(), Benplusplus.Node.op_atoms(), Context) :: {list(String.t()), Context}
