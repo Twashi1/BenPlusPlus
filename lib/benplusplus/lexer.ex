@@ -1,6 +1,5 @@
 defmodule Benplusplus.Lexer do
-  # TODO: Switch to making the IO list store regex patterns instead of strings representing regex patterns
-  @type token() :: {String.t(), atom()}
+  @type token() :: {atom(), String.t()}
 
   @tokens [
     {~r/^perhaps/, :if},
