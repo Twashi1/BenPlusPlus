@@ -16,10 +16,10 @@ defmodule Mix.Tasks.Execute do
         # Load filepath and set to code
         {status, filedata} = File.read(filepath)
 
-      case status do
-        :ok -> Benplusplus.Lexer.tokenise(filedata)
-        :error -> raise("Couldn't load file, couldn't load code")
-      end
+        case status do
+          :ok -> Benplusplus.Lexer.tokenise(filedata)
+          :error -> raise("Couldn't load file, couldn't load code")
+        end
       _ -> Benplusplus.Lexer.tokenise(code)
     end
 
@@ -29,10 +29,21 @@ defmodule Mix.Tasks.Execute do
 
     IO.puts("AST: #{Benplusplus.Parser.pretty_print_node(ast_root)}")
 
-    context = %Benplusplus.Codegenerator.Context{}
+    instructions = Benplusplus.Codegenerator.generate_instructions(ast_root)
+    output_string = instructions |> Enum.join("\n")
 
-    instructions = Benplusplus.Codegenerator.generate_code(ast_root, context)
+    IO.puts("Finished compilation")
 
-    IO.inspect(instructions, label: "Instructions: ")
+    # Look for output
+    case parsed[:cout] do
+      nil ->
+        case parsed[:ofile] do
+          nil -> IO.puts("Must specify output as either --cout or --ofile 'file.txt'")
+          filepath ->
+            IO.puts("Writing to file #{filepath}")
+            File.write(filepath, output_string)
+        end
+      _ -> IO.puts(output_string)
+    end
   end
 end
