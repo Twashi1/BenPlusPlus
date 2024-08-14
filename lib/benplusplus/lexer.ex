@@ -3,28 +3,28 @@ defmodule Benplusplus.Lexer do
   @type token() :: {String.t(), atom()}
 
   @tokens [
-    {"perhaps", :if},
-    {"otherwise perhaps", :elif},
-    {"otherwise", :else},
-    {"int", :int},
-    {"string", :string},
-    {"char", :char},
-    {"[a-zA-Z_][a-zA-Z0-9_]*", :identifier},
-    {"[0-9]+", :number},
-    {"\\*", :multiply},
-    {"\\/", :divide},
-    {"-", :minus},
-    {"\\+", :plus},
-    {"==", :assignment},
-    {"=", :equals},
-    {":", :colon},
-    {"\\(", :left_paren},
-    {"\\)", :right_paren},
-    {"\\[", :left_square},
-    {"\\]", :right_square},
-    {"\\{", :left_curly},
-    {"\\}", :right_curly},
-    {"[ \t\r\n]+", :whitespace}
+    {~r/^perhaps/, :if},
+    {~r/^otherwise perhaps/, :elif},
+    {~r/^otherwise/, :else},
+    {~r/^int/, :int},
+    {~r/^string/, :string},
+    {~r/^char/, :char},
+    {~r/^[a-zA-Z_][a-zA-Z0-9_]*/, :identifier},
+    {~r/^[0-9]+/, :number},
+    {~r/^\*/, :multiply},
+    {~r/^\//, :divide},
+    {~r/^-/, :minus},
+    {~r/^\+/, :plus},
+    {~r/^==/, :assignment},
+    {~r/^=/, :equals},
+    {~r/^:/, :colon},
+    {~r/^\(/, :left_paren},
+    {~r/^\)/, :right_paren},
+    {~r/^\[/, :left_square},
+    {~r/^\]/, :right_square},
+    {~r/^\{/, :left_curly},
+    {~r/^\}/, :right_curly},
+    {~r/^[ \\t\\r\\n]+/, :whitespace}
   ]
 
   def tokenise(input) do
@@ -37,10 +37,10 @@ defmodule Benplusplus.Lexer do
 
   defp tokenise(input, tokens) do
     {matched, type} = Enum.find(@tokens, fn {regex, _type} ->
-      Regex.match?(~r/^#{regex}/, input)
+      Regex.match?(regex, input)
     end)
 
-    [match] = Regex.run(~r/^#{matched}/, input)
+    [match] = Regex.run(matched, input)
     rest = String.slice(input, String.length(match), String.length(input) - String.length(match))
 
     case type do
