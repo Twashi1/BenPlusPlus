@@ -1,7 +1,7 @@
 defmodule Benplusplus.Node do
   @type op_atoms ::
     :add | :minus | :multiply | :divide
-  @type type_atoms :: :int
+  @type type_atoms :: :int | :bool | :char | :string
 
 
   @type node_number :: {:number, number()}
@@ -11,10 +11,11 @@ defmodule Benplusplus.Node do
   @type node_vardecl :: {:vardecl, node_type(), node_var(), astnode()}
   @type node_assign :: {:assign, node_var(), astnode()}
   @typedoc "Integer represents the maximum stack size required for this scope"
-  @type node_compound :: {:compound, list(astnode()), integer()}
+  @type node_compound :: {:compound, list(astnode())}
+  @type node_bool :: {:boolean, boolean()}
 
   @type astnode ::
-    node_number() | node_binop() | node_var() | node_type() | node_vardecl() | node_assign() | node_compound()
+    node_number() | node_binop() | node_var() | node_type() | node_vardecl() | node_assign() | node_compound() | node_bool()
 
   @spec construct_number(number()) :: node_number()
   def construct_number(number) do
@@ -41,9 +42,9 @@ defmodule Benplusplus.Node do
     {:assign, var, expression}
   end
 
-  @spec construct_compound(list(astnode()), integer()) :: node_compound()
-  def construct_compound(statements, stack_size) do
-    {:compound, statements, stack_size}
+  @spec construct_compound(list(astnode())) :: node_compound()
+  def construct_compound(statements) do
+    {:compound, statements}
   end
 
   @spec construct_type(type_atoms()) :: node_type()
@@ -51,10 +52,18 @@ defmodule Benplusplus.Node do
     {:type, atom}
   end
 
-  @spec sizeof_type(type_atoms()) :: integer()
+  @spec construct_bool(boolean()) :: node_bool()
+  def construct_bool(bool) do
+    {:boolean, bool}
+  end
+
+  @spec sizeof_type(type_atoms()) :: integer() | :error
   def sizeof_type(atom) do
     case atom do
+      :bool -> 1
+      :char -> 1
       :int -> 4
+      :string -> 4
       _ -> :error
     end
   end

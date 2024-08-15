@@ -5,9 +5,13 @@ defmodule Benplusplus.Lexer do
     {~r/^perhaps/, :if},
     {~r/^otherwise perhaps/, :elif},
     {~r/^otherwise/, :else},
-    {~r/^int/, :int},
-    {~r/^string/, :string},
-    {~r/^char/, :char},
+    {~r/^true/, :true},
+    {~r/^false/, :false},
+    # TODO: easier way of doing this? ^(int|char|bool|string) didn't work, was matching multiple things I think
+    {~r/^int/, :typename},
+    {~r/^char/, :typename},
+    {~r/^bool/, :typename},
+    {~r/^string/, :typename},
     {~r/^[a-zA-Z_][a-zA-Z0-9_]*/, :identifier},
     {~r/^[0-9]+/, :number},
     {~r/^\*/, :multiply},
@@ -23,7 +27,9 @@ defmodule Benplusplus.Lexer do
     {~r/^\]/, :right_square},
     {~r/^\{/, :left_curly},
     {~r/^\}/, :right_curly},
-    {~r/^[ \\t\\r\\n]+/, :whitespace}
+    {~r/\|/, :and},
+    {~r/&/, :or},
+    {~r/^[ \\t\\r\\n]+/, :whitespace},
   ]
 
   def tokenise(input) do
@@ -40,6 +46,11 @@ defmodule Benplusplus.Lexer do
     end)
 
     [match] = Regex.run(matched, input)
+
+    if String.length(match) == 0 do
+      raise RuntimeError, message: "Error, matched 0 length string on input '#{input}'"
+    end
+
     rest = String.slice(input, String.length(match), String.length(input) - String.length(match))
 
     case type do

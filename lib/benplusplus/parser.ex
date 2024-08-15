@@ -1,5 +1,5 @@
 defmodule Benplusplus.Parser do
-  """
+  _ = """
   Current definition:
 
   <program> ::= <statement_list>
@@ -8,11 +8,11 @@ defmodule Benplusplus.Parser do
   <statement> ::= <declaration> | <assignment>
   <declaration> ::= <identifier> == <type> == <expression> :
   <assignment> ::= <identifier> == <expression> :
-  <type> ::= int
-  <expression> ::= <number> | <expression> <operation> <expression> | {<expression>}
+  <type> ::= int | bool
+  <expression> ::= <number> | <identifier> | <expression> <operation> <expression> | {<expression>}
   <operation> ::= + | - | / | *
   """
-
+  @typenames %{"int" => :int, "string" => :string, "bool" => :bool, "char" => :char}
 
   @type precedence() :: :value | :add_sub | :multiply_divide | :expression
 
@@ -38,9 +38,12 @@ defmodule Benplusplus.Parser do
   @spec pretty_print_statements(list(Benplusplus.Node.astnode())) :: String.t()
   def pretty_print_statements(statements) do
     case statements do
-      :nil -> ":nil"
       [] -> ""
-      [head | tail] -> "#{pretty_print_node(head)}, #{pretty_print_statements(tail)}"
+      [head | tail] ->
+        case tail do
+          [] -> "#{pretty_print_node(head)}"
+          _ -> "#{pretty_print_node(head)}, #{pretty_print_statements(tail)}"
+        end
     end
   end
 
@@ -52,7 +55,7 @@ defmodule Benplusplus.Parser do
       {:var, name} -> "<Var: #{name}>"
       {:vardecl, type, identifier, expression} -> "<Declaration(#{pretty_print_node(type)}): var: #{pretty_print_node(identifier)}, val: #{pretty_print_node(expression)}>"
       {:assign, var, rhs} -> "<Assign, var: #{pretty_print_node(var)}, val: #{pretty_print_node(rhs)}>"
-      {:compound, nodes, stack_size} -> "<Compound(size:#{stack_size}), values: [#{pretty_print_statements(nodes)}]>"
+      {:compound, nodes} -> "<Compound, values: [#{pretty_print_statements(nodes)}]>"
       {:type, atom} -> "<Type: #{Atom.to_string(atom)}>"
       _ ->
         IO.inspect(root, label: "Got unknown token type")
@@ -62,29 +65,28 @@ defmodule Benplusplus.Parser do
 
   @spec parse_compound(list(Benplusplus.Lexer.token())) :: Benplusplus.Node.node_compound()
   defp parse_compound(token_stream) do
-    {statements, stack_size} = statement_list(token_stream)
+    statements = statement_list(token_stream)
 
-    Benplusplus.Node.construct_compound(statements, stack_size)
+    Benplusplus.Node.construct_compound(statements)
   end
 
-  @spec statement_list(list(Benplusplus.Lexer.token())) :: {list(Benplusplus.Node.astnode()), integer()}
+  @spec statement_list(list(Benplusplus.Lexer.token())) :: list(Benplusplus.Node.astnode())
   defp statement_list(token_stream) do
     case token_stream do
-      [] -> {[], 0}
+      [] -> []
       _ ->
-        {node, token_stream, stack_required} = statement(token_stream)
+        {node, token_stream } = statement(token_stream)
         token_stream = eat(token_stream, :colon)
 
         case token_stream do
-          [] -> { [node], stack_required }
+          [] -> [node]
           _ ->
-            { tail_statements, tail_stack } = statement_list(token_stream)
-            { [node | tail_statements], tail_stack + stack_required }
+            [node | statement_list(token_stream)]
         end
     end
   end
 
-  @spec statement(list(Benplusplus.Lexer.token())) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token()), integer()}
+  @spec statement(list(Benplusplus.Lexer.token())) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token())}
   defp statement(token_stream) do
     [current_token | token_stream] = token_stream
 
@@ -100,64 +102,67 @@ defmodule Benplusplus.Parser do
           [{token_type, token_value} | token_stream] ->
             case token_type do
               # Construct variable declaration
-              :int ->
-                IO.puts("Parsing variable declaration for token stream: #{Benplusplus.Lexer.pretty_print_tokens(token_stream)}")
-                token_stream = eat(token_stream, :assignment)
-                {rhs, token_stream, additional_stack } = expression(token_stream, :expression)
-                IO.puts("Ate all characters, left with: #{Benplusplus.Lexer.pretty_print_tokens(token_stream)}")
-                { Benplusplus.Node.construct_variable_declaration(Benplusplus.Node.construct_type(:int), var_node, rhs), token_stream, additional_stack + Benplusplus.Node.sizeof_type(:int) }
+              :typename ->
+                type_atom = @typenames[token_value]
+
+                case type_atom do
+                  :nil -> error("Forgot to add typename #{token_value} to the @typenames module attribute")
+                  _ ->
+                    token_stream = eat(token_stream, :assignment)
+                    {rhs, token_stream } = expression(token_stream, :expression)
+                    { Benplusplus.Node.construct_variable_declaration(Benplusplus.Node.construct_type(type_atom), var_node, rhs), token_stream }
+                end
               # Construct assignment
               _ ->
                 token_stream = [{token_type, token_value} | token_stream]
-                IO.puts("Current stream: #{Benplusplus.Lexer.pretty_print_tokens(token_stream)}")
-                {rhs, token_stream, additional_stack } = expression(token_stream, :expression)
-                IO.puts("Got expression: #{pretty_print_node(rhs)}")
-                { Benplusplus.Node.construct_assignment(var_node, rhs), token_stream, additional_stack }
+                {rhs, token_stream } = expression(token_stream, :expression)
+                { Benplusplus.Node.construct_assignment(var_node, rhs), token_stream }
             end
         end
       _ -> error("Expected identifier when parsing statement")
     end
   end
 
-  @spec precedence_value(list(Benplusplus.Lexer.token())) :: {Benplusplus.Node.node_number() | Benplusplus.Node.node_var(), list(Benplusplus.Lexer.token()), integer()}
+  @spec precedence_value(list(Benplusplus.Lexer.token())) :: {Benplusplus.Node.node_number() | Benplusplus.Node.node_var() | Benplusplus.Node.node_bool(), list(Benplusplus.Lexer.token())}
   defp precedence_value(token_stream) do
     current_token = hd(token_stream)
 
     case current_token do
       {:number, value} ->
-        IO.inspect(token_stream, label: "Constructing value node")
-        { Benplusplus.Node.construct_number(String.to_integer(value)), tl(token_stream), Benplusplus.Node.sizeof_type(:int) }
+        { Benplusplus.Node.construct_number(String.to_integer(value)), tl(token_stream) }
+      {:true, _value} ->
+        { Benplusplus.Node.construct_bool(true), tl(token_stream) }
+      {:false, _value} ->
+        { Benplusplus.Node.construct_bool(false), tl(token_stream) }
       {:identifier, value} ->
-        # TODO: require space for this right now, but not ideal (we need space on arena pointer for temporary)
-        #   could only really fix in code generator
-        { Benplusplus.Node.construct_variable(value), tl(token_stream), Benplusplus.Node.sizeof_type(:int) }
+        { Benplusplus.Node.construct_variable(value), tl(token_stream) }
       # Equivalent of parenthesis
       {:left_curly, _value} ->
         # Advance past the left curly
         token_stream = eat(token_stream, :left_curly)
         # Get the inner expression
-        { inner, token_stream, stack_required } = expression(token_stream)
+        { inner, token_stream } = expression(token_stream)
         # Advance past the right curly
         token_stream = eat(token_stream, :right_curly)
         # Return inner expression
-        { inner, token_stream, stack_required}
+        { inner, token_stream, }
       _ -> error("Expected number or variable in parser, got: #{elem(current_token, 0)}")
     end
   end
 
-  @spec expression(list(Benplusplus.Lexer.token())) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token()), integer()}
+  @spec expression(list(Benplusplus.Lexer.token())) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token())}
   def expression(token_stream) do
     expression(token_stream, :expression)
   end
 
-  @spec expression(list(Benplusplus.Lexer.token()), :value) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token()), integer()}
+  @spec expression(list(Benplusplus.Lexer.token()), :value) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token())}
   defp expression(token_stream, :value) do
     precedence_value(token_stream)
   end
 
-  @spec expression(list(Benplusplus.Lexer.token()), precedence()) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token()), integer()}
+  @spec expression(list(Benplusplus.Lexer.token()), precedence()) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token())}
   defp expression(token_stream, precedence_level) do
-    { lhs, token_stream, stack_required } = expression(token_stream, higher_precedence(precedence_level))
+    { lhs, token_stream } = expression(token_stream, higher_precedence(precedence_level))
 
     case token_stream do
       [] -> { lhs, token_stream }
@@ -166,21 +171,21 @@ defmodule Benplusplus.Parser do
           :add_sub ->
             cond do
               op_type in [:plus, :minus] ->
-                { rhs, token_stream, additional_stack } = expression(token_stream, higher_precedence(precedence_level))
-                { Benplusplus.Node.construct_binary_operation(lhs, rhs, op_type), token_stream, stack_required + additional_stack }
+                { rhs, token_stream } = expression(token_stream, higher_precedence(precedence_level))
+                { Benplusplus.Node.construct_binary_operation(lhs, rhs, op_type), token_stream }
               # Add back operator
-              true -> { lhs, [{op_type, op_value} | token_stream], stack_required }
+              true -> { lhs, [{op_type, op_value} | token_stream] }
             end
           :multiply_divide ->
             cond do
               op_type in [:multiply, :divide] ->
-                { rhs, token_stream, additional_stack } = expression(token_stream, higher_precedence(precedence_level))
-                { Benplusplus.Node.construct_binary_operation(lhs, rhs, op_type), token_stream, stack_required + additional_stack }
+                { rhs, token_stream } = expression(token_stream, higher_precedence(precedence_level))
+                { Benplusplus.Node.construct_binary_operation(lhs, rhs, op_type), token_stream }
               # Add back operator
-              true -> { lhs, [{op_type, op_value} | token_stream], stack_required }
+              true -> { lhs, [{op_type, op_value} | token_stream] }
             end
           :expression ->
-            { lhs, [{op_type, op_value} | token_stream], stack_required }
+            { lhs, [{op_type, op_value} | token_stream] }
         end
     end
   end
