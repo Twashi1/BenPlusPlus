@@ -1,4 +1,19 @@
 defmodule Benplusplus.Parser do
+  """
+  Current definition:
+
+  <program> ::= <statement_list>
+  <compound> ::= [ <statement_list> ]
+  <statement_list> ::= <statement> | <statement> <statement_list>
+  <statement> ::= <declaration> | <assignment>
+  <declaration> ::= <identifier> == <type> == <expression> :
+  <assignment> ::= <identifier> == <expression> :
+  <type> ::= int
+  <expression> ::= <number> | <expression> <operation> <expression> | {<expression>}
+  <operation> ::= + | - | / | *
+  """
+
+
   @type precedence() :: :value | :add_sub | :multiply_divide | :expression
 
   @spec error(String.t()) :: no_return()
@@ -116,6 +131,16 @@ defmodule Benplusplus.Parser do
         # TODO: require space for this right now, but not ideal (we need space on arena pointer for temporary)
         #   could only really fix in code generator
         { Benplusplus.Node.construct_variable(value), tl(token_stream), Benplusplus.Node.sizeof_type(:int) }
+      # Equivalent of parenthesis
+      {:left_curly, _value} ->
+        # Advance past the left curly
+        token_stream = eat(token_stream, :left_curly)
+        # Get the inner expression
+        { inner, token_stream, stack_required } = expression(token_stream)
+        # Advance past the right curly
+        token_stream = eat(token_stream, :right_curly)
+        # Return inner expression
+        { inner, token_stream, stack_required}
       _ -> error("Expected number or variable in parser, got: #{elem(current_token, 0)}")
     end
   end
