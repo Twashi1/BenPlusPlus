@@ -5,12 +5,13 @@ defmodule Benplusplus.Parser do
   <program> ::= <statement_list>
   <compound> ::= [ <statement_list> ]
   <statement_list> ::= <statement> | <statement> <statement_list>
-  <statement> ::= <declaration> | <assignment>
-  <declaration> ::= <identifier> == <type> == <expression> :
-  <assignment> ::= <identifier> == <expression> :
+  <statement> ::= <declaration> : | <assignment> : | <compound> : | <if> :
+  <declaration> ::= <identifier> == <type> == <expression>
+  <assignment> ::= <identifier> == <expression>
   <type> ::= int | bool
   <expression> ::= <number> | <identifier> | <expression> <operation> <expression> | {<expression>}
   <operation> ::= + | - | / | * | = | & | \| |
+  <if> ::= perhaps <expression> <compound> | perhaps <expression> otherwise <compound> | perhaps <expression> otherwise <if>
   """
   @typenames %{"int" => :int, "string" => :string, "bool" => :bool, "char" => :char}
 
@@ -36,7 +37,9 @@ defmodule Benplusplus.Parser do
 
   @spec parse(list(Benplusplus.Lexer.token())) :: Benplusplus.Node.node_compound()
   def parse(token_stream) do
-    parse_compound(token_stream)
+    {root, _} = parse_program(token_stream)
+
+    root
   end
 
   @spec pretty_print_statements(list(Benplusplus.Node.astnode())) :: String.t()
@@ -62,31 +65,65 @@ defmodule Benplusplus.Parser do
       {:compound, nodes} -> "<Compound, values: [#{pretty_print_statements(nodes)}]>"
       {:type, atom} -> "<Type: #{Atom.to_string(atom)}>"
       {:boolean, value} -> "<Bool: #{value}>"
+      {:if, condition, success_branch, failure_branch} -> "<If(#{pretty_print_node(condition)}), Success: #{pretty_print_node(success_branch)}, Failure: #{pretty_print_node(failure_branch)}>"
       _ ->
         IO.inspect(root, label: "Got unknown token type")
         "<Unknown?>"
     end
   end
 
-  @spec parse_compound(list(Benplusplus.Lexer.token())) :: Benplusplus.Node.node_compound()
-  defp parse_compound(token_stream) do
-    statements = statement_list(token_stream)
+  @spec parse_program(list(Benplusplus.Lexer.token())) :: { Benplusplus.Node.node_compound(), list(Benplusplus.Lexer.token()) }
+  defp parse_program(token_stream) do
+    {statements, token_stream } = statement_list(token_stream)
 
-    Benplusplus.Node.construct_compound(statements)
+    { Benplusplus.Node.construct_compound(statements), token_stream }
   end
 
-  @spec statement_list(list(Benplusplus.Lexer.token())) :: list(Benplusplus.Node.astnode())
+  @spec parse_compound(list(Benplusplus.Lexer.token())) :: { Benplusplus.Node.node_compound(), list(Benplusplus.Lexer.token()) }
+  defp parse_compound(token_stream) do
+    token_stream = eat(token_stream, :left_square)
+    { statements, token_stream } = statement_list(token_stream)
+    token_stream = eat(token_stream, :right_square)
+
+    { Benplusplus.Node.construct_compound(statements), token_stream}
+  end
+
+  @spec parse_if(list(Benplusplus.Lexer.token())) :: {Benplusplus.Node.node_if(), list(Benplusplus.Lexer.token())}
+  defp parse_if(token_stream) do
+    token_stream = eat(token_stream, :if)
+    {condition, token_stream} = expression(token_stream)
+    IO.puts("Got condition: #{pretty_print_node(condition)}, with remaining stream: #{Benplusplus.Lexer.pretty_print_tokens(token_stream)}")
+    {success_branch, token_stream} = parse_compound(token_stream)
+
+    case token_stream do
+      [] -> {Benplusplus.Node.construct_if(condition, success_branch, Benplusplus.Node.construct_noop()), token_stream}
+      [{token_type, _token_value} | tail] ->
+        case token_type do
+          :else ->
+            { failure_branch, token_stream } = statement(tail)
+            {Benplusplus.Node.construct_if(condition, success_branch, failure_branch), token_stream}
+          _ -> {Benplusplus.Node.construct_if(condition, success_branch, Benplusplus.Node.construct_noop()), token_stream}
+        end
+    end
+  end
+
+  @spec statement_list(list(Benplusplus.Lexer.token())) :: {list(Benplusplus.Node.astnode()), list(Benplusplus.Lexer.token())}
   defp statement_list(token_stream) do
     case token_stream do
-      [] -> []
-      _ ->
-        {node, token_stream } = statement(token_stream)
-        token_stream = eat(token_stream, :colon)
-
-        case token_stream do
-          [] -> [node]
+      [] -> {[], []}
+      [{token_type, _token_value} | _tail_token_stream] ->
+        case token_type do
+          :right_square -> {[], token_stream}
           _ ->
-            [node | statement_list(token_stream)]
+            {node, token_stream } = statement(token_stream)
+            token_stream = eat(token_stream, :colon)
+
+            case token_stream do
+              [] -> {[node], token_stream}
+              _ ->
+                {tail, token_stream} = statement_list(token_stream)
+                {[node | tail], token_stream}
+            end
         end
     end
   end
@@ -96,6 +133,8 @@ defmodule Benplusplus.Parser do
     [current_token | token_stream] = token_stream
 
     case current_token do
+      {:if, _value} ->
+        parse_if([current_token | token_stream])
       {:identifier, value} ->
         var_node = Benplusplus.Node.construct_variable(value)
 
@@ -124,6 +163,8 @@ defmodule Benplusplus.Parser do
                 { Benplusplus.Node.construct_assignment(var_node, rhs), token_stream }
             end
         end
+      {:left_square, _value} ->
+        parse_compound([current_token | token_stream])
       _ -> error("Expected identifier when parsing statement")
     end
   end
@@ -233,7 +274,7 @@ defmodule Benplusplus.Parser do
   defp eat(token_stream, token_type) do
     case token_stream do
       [] -> error("Expected token #{token_type} but got end of file")
-      [current_token | tail] -> if elem(current_token, 0) == token_type, do: tail, else: error("Expected token #{token_type} got token #{elem(current_token, 0)}")
+      [current_token | tail] -> if elem(current_token, 0) == token_type, do: tail, else: error("Expected token <#{token_type}> got token #{elem(current_token, 0)} from stream #{Benplusplus.Lexer.pretty_print_tokens(token_stream)}")
     end
   end
 end

@@ -1,6 +1,6 @@
 defmodule Benplusplus.Codegenerator do
   defmodule Context do
-    defstruct stack_frames: []
+    defstruct stack_frames: [], label_increment: 0
   end
 
   # Stack of stack frames
@@ -28,6 +28,8 @@ defmodule Benplusplus.Codegenerator do
       {:vardecl, type, var, expression} -> generate_code_variable_declaration(type, var, expression, context)
       {:var, var_name} -> generate_code_variable(var_name, context)
       {:boolean, value} -> generate_code_bool(value, context)
+      {:if, condition, success_branch, failure_branch} -> generate_code_if(condition, success_branch, failure_branch, context)
+      {:noop} -> {[], context}
       _ -> {["Unknown: #{Benplusplus.Parser.pretty_print_node(ast_node)}"], context}
     end
   end
@@ -68,12 +70,16 @@ defmodule Benplusplus.Codegenerator do
   @spec count_stack_size(Benplusplus.Node.astnode(), list(%StackFrame{})) :: integer()
   defp count_stack_size(root, stack_frames) do
     case root do
+      # We only care about the current stack frame
+      {:compound, _statements} -> 0
       {:number, _value} -> Benplusplus.Node.sizeof_type(:int)
       {:boolean, _value} -> Benplusplus.Node.sizeof_type(:bool)
       {:binop, left, right, _op_atom} ->
         count_stack_size(left, stack_frames) + count_stack_size(right, stack_frames)
       {:unary, value, _op_atom} ->
         count_stack_size(value, stack_frames)
+      {:if, condition, success_branch, failure_branch} ->
+        count_stack_size(condition, stack_frames) + count_stack_size(success_branch, stack_frames) + count_stack_size(failure_branch, stack_frames)
       {:var, var_name} ->
         case find_variable_type(var_name, stack_frames) do
           :nil -> error("Unrecognised variable #{var_name}")
@@ -109,6 +115,10 @@ defmodule Benplusplus.Codegenerator do
             %StackFrame{current_stack_frame |
               size: current_stack_frame.size + count_stack_size(expr, [current_stack_frame | context.stack_frames])
             }
+          {:if, _condition, _success_branch, _failure_branch} ->
+            %StackFrame{current_stack_frame |
+              size: current_stack_frame.size + count_stack_size(head, [current_stack_frame | context.stack_frames])
+            }
           _ -> current_stack_frame
         end
 
@@ -126,6 +136,23 @@ defmodule Benplusplus.Codegenerator do
     {write_stack, context} = write_to_stack(context)
 
     {statement ++ write_stack, context}
+  end
+
+  @spec generate_code_if(Benplusplus.Node.astnode(), Benplusplus.Node.astnode(), Benplusplus.Node.astnode(), %Context{}) :: {list(String.t()), %Context{}}
+  defp generate_code_if(condition, success_branch, failure_branch, context) do
+    # Expecting to get out some expression, maybe validate this?
+    positive_label = "if#{context.label_increment}p"
+    negative_label = "if#{context.label_increment}n"
+    end_label = "if#{context.label_increment}end"
+    context = %Context{context | label_increment: context.label_increment + 1}
+
+    {condition_code, context} = generate_code(condition, context)
+    {success_branch, context} = generate_code(success_branch, context)
+    {failure_branch, context} = generate_code(failure_branch, context)
+
+    {read_condition, context} = read_from_stack(context)
+
+    {condition_code ++ read_condition ++ ["slti t0, t0, 1"] ++ ["bne t0, zero, #{positive_label}"] ++ ["#{negative_label}:"] ++ failure_branch ++ ["beq zero, zero, #{end_label}"] ++ ["#{positive_label}:"] ++ success_branch ++ ["#{end_label}:"], context}
   end
 
   @spec generate_code_variable(String.t(), %Context{}) :: {list(String.t()), %Context{}}
@@ -198,7 +225,7 @@ defmodule Benplusplus.Codegenerator do
       :minus -> ["sub t0, t0, t1"]
       :multiply -> ["mul t0, t0, t1"]
       :divide -> ["div t0, t0, t1"]
-      :equal -> ["xor t0, t0, t1", "xori t0, t0, -1"]
+      :equal -> ["xor t0, t0, t1", "slti t0, t0, 1"]
       :and -> ["and t0, t0, t1"]
       :or -> ["or t0, t0, t1"]
       _ -> raise("Expected mathematical operator +-*/, got #{op_atom}")

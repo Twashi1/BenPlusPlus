@@ -19,7 +19,7 @@ defmodule Benplusplus.Lexer do
     {~r/^-/, :minus},
     {~r/^\+/, :plus},
     {~r/^==/, :assignment},
-    {~r/^=/, :equals},
+    {~r/^=/, :equal},
     {~r/^:/, :colon},
     {~r/^\(/, :left_paren},
     {~r/^\)/, :right_paren},
