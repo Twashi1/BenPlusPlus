@@ -22,10 +22,12 @@ defmodule Benplusplus.Codegenerator do
     case ast_node do
       {:number, number} -> generate_code_number(number, context)
       {:binop, left, right, op_atom} -> generate_code_binop(left, right, op_atom, context)
+      {:unary, value, op_atom} -> generate_code_unary(value, op_atom, context)
       {:compound, statement_list} -> generate_code_compound(statement_list, context)
       {:assign, var, expression} -> generate_code_assign(var, expression, context)
       {:vardecl, type, var, expression} -> generate_code_variable_declaration(type, var, expression, context)
       {:var, var_name} -> generate_code_variable(var_name, context)
+      {:boolean, value} -> generate_code_bool(value, context)
       _ -> {["Unknown: #{Benplusplus.Parser.pretty_print_node(ast_node)}"], context}
     end
   end
@@ -67,8 +69,11 @@ defmodule Benplusplus.Codegenerator do
   defp count_stack_size(root, stack_frames) do
     case root do
       {:number, _value} -> Benplusplus.Node.sizeof_type(:int)
+      {:boolean, _value} -> Benplusplus.Node.sizeof_type(:bool)
       {:binop, left, right, _op_atom} ->
         count_stack_size(left, stack_frames) + count_stack_size(right, stack_frames)
+      {:unary, value, _op_atom} ->
+        count_stack_size(value, stack_frames)
       {:var, var_name} ->
         case find_variable_type(var_name, stack_frames) do
           :nil -> error("Unrecognised variable #{var_name}")
@@ -109,6 +114,18 @@ defmodule Benplusplus.Codegenerator do
 
         generate_stack_frame(tail, context, result_frame)
     end
+  end
+
+  @spec generate_code_bool(:true | :false, %Context{}) :: {list(String.t()), %Context{}}
+  defp generate_code_bool(truthiness, context) do
+    statement = case truthiness do
+      :true -> ["addi t0, zero, -1"]
+      :false -> ["addi t0, zero, 0"]
+    end
+
+    {write_stack, context} = write_to_stack(context)
+
+    {statement ++ write_stack, context}
   end
 
   @spec generate_code_variable(String.t(), %Context{}) :: {list(String.t()), %Context{}}
@@ -177,10 +194,13 @@ defmodule Benplusplus.Codegenerator do
     {right_code, context} = generate_code(right, context)
 
     operation_code = case op_atom do
-      :plus -> "add t0, t0, t1"
-      :minus -> "sub t0, t0, t1"
-      :multiply -> "mul t0, t0, t1"
-      :divide -> "div t0, t0, t1"
+      :plus -> ["add t0, t0, t1"]
+      :minus -> ["sub t0, t0, t1"]
+      :multiply -> ["mul t0, t0, t1"]
+      :divide -> ["div t0, t0, t1"]
+      :equal -> ["xor t0, t0, t1", "xori t0, t0, -1"]
+      :and -> ["and t0, t0, t1"]
+      :or -> ["or t0, t0, t1"]
       _ -> raise("Expected mathematical operator +-*/, got #{op_atom}")
     end
 
@@ -194,7 +214,24 @@ defmodule Benplusplus.Codegenerator do
     # Read right from stack into register t0
     # Perform operation
     # Write back to stack
-    {left_code ++ right_code ++ read_left_value ++ ["mv t1, t0"] ++ read_right_value ++ [operation_code] ++ write_result, context}
+    {left_code ++ right_code ++ read_left_value ++ ["mv t1, t0"] ++ read_right_value ++ operation_code ++ write_result, context}
+  end
+
+  @spec generate_code_unary(Benplusplus.Node.astnode(), Benplusplus.Node.unary_op_atoms(), %Context{}) :: {list(String.t()), %Context{}}
+  defp generate_code_unary(value, op_atom, context) do
+    # Push value to stack
+    {value_code, context} = generate_code(value, context)
+
+    operation_code = case op_atom do
+      :minus -> ["sub t0, zero, t0"]
+      :not -> ["xori t0, t0, -1"]
+    end
+
+    # Load value to t0
+    {read_value, context} = read_from_stack(context)
+    {write_result, context} = write_to_stack(context)
+
+    {value_code ++ read_value ++ operation_code ++ write_result, context}
   end
 
   # Move the arena pointer of the first stack frame by diff

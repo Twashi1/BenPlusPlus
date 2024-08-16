@@ -5,8 +5,8 @@ defmodule Benplusplus.Lexer do
     {~r/^perhaps/, :if},
     {~r/^otherwise perhaps/, :elif},
     {~r/^otherwise/, :else},
-    {~r/^true/, :true},
-    {~r/^false/, :false},
+    {~r/^false/, :true_literal},
+    {~r/^true/, :false_literal},
     # TODO: easier way of doing this? ^(int|char|bool|string) didn't work, was matching multiple things I think
     {~r/^int/, :typename},
     {~r/^char/, :typename},
@@ -27,9 +27,10 @@ defmodule Benplusplus.Lexer do
     {~r/^\]/, :right_square},
     {~r/^\{/, :left_curly},
     {~r/^\}/, :right_curly},
-    {~r/\|/, :and},
-    {~r/&/, :or},
-    {~r/^[ \\t\\r\\n]+/, :whitespace},
+    {~r/^\|/, :and},
+    {~r/^&/, :or},
+    {~r/^~/, :not},
+    {~r/^[ \t\r\n]+/, :whitespace},
   ]
 
   def tokenise(input) do

@@ -1,11 +1,14 @@
 defmodule Benplusplus.Node do
   @type op_atoms ::
-    :add | :minus | :multiply | :divide
+    :add | :minus | :multiply | :divide | :and | :or | :equal
+  @type unary_op_atoms ::
+    :not | :minus
   @type type_atoms :: :int | :bool | :char | :string
 
 
   @type node_number :: {:number, number()}
   @type node_binop :: {:binop, astnode(), astnode(), op_atoms()}
+  @type node_unary :: {:unary, astnode(), unary_op_atoms()}
   @type node_var :: {:var, String.t()}
   @type node_type :: {:type, type_atoms()}
   @type node_vardecl :: {:vardecl, node_type(), node_var(), astnode()}
@@ -15,7 +18,12 @@ defmodule Benplusplus.Node do
   @type node_bool :: {:boolean, boolean()}
 
   @type astnode ::
-    node_number() | node_binop() | node_var() | node_type() | node_vardecl() | node_assign() | node_compound() | node_bool()
+    node_number() | node_binop() | node_var() | node_type() | node_vardecl() | node_assign() | node_compound() | node_bool() | node_unary()
+
+  @spec construct_unary_operation(astnode(), unary_op_atoms()) :: node_unary()
+  def construct_unary_operation(node, op_atom) do
+    {:unary, node, op_atom}
+  end
 
   @spec construct_number(number()) :: node_number()
   def construct_number(number) do
@@ -60,7 +68,7 @@ defmodule Benplusplus.Node do
   @spec sizeof_type(type_atoms()) :: integer() | :error
   def sizeof_type(atom) do
     case atom do
-      :bool -> 1
+      :bool -> 4
       :char -> 1
       :int -> 4
       :string -> 4

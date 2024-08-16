@@ -18,17 +18,3 @@ benchen fibenacci{first == int, second == int, third == int} [
 ]
 
 {1, 2, 3}fibenacci:
-
-TODO:
-perhaps
-otherwise
-int
-char
-string
-==
-=
-+
--
-/
-*
-:

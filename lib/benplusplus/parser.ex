@@ -10,11 +10,11 @@ defmodule Benplusplus.Parser do
   <assignment> ::= <identifier> == <expression> :
   <type> ::= int | bool
   <expression> ::= <number> | <identifier> | <expression> <operation> <expression> | {<expression>}
-  <operation> ::= + | - | / | *
+  <operation> ::= + | - | / | * | = | & | \| |
   """
   @typenames %{"int" => :int, "string" => :string, "bool" => :bool, "char" => :char}
 
-  @type precedence() :: :value | :add_sub | :multiply_divide | :expression
+  @type precedence() :: :value | :equal | :and | :or | :not | :add_sub | :multiply_divide | :expression
 
   @spec error(String.t()) :: no_return()
   defp error(message) do
@@ -24,7 +24,11 @@ defmodule Benplusplus.Parser do
   @spec higher_precedence(precedence()) :: precedence()
   defp higher_precedence(precedence_level) do
     case precedence_level do
-      :add_sub -> :value
+      :equal -> :value
+      :and -> :equal
+      :or -> :and
+      :not -> :or
+      :add_sub -> :not
       :multiply_divide -> :add_sub
       :expression -> :multiply_divide
     end
@@ -57,6 +61,7 @@ defmodule Benplusplus.Parser do
       {:assign, var, rhs} -> "<Assign, var: #{pretty_print_node(var)}, val: #{pretty_print_node(rhs)}>"
       {:compound, nodes} -> "<Compound, values: [#{pretty_print_statements(nodes)}]>"
       {:type, atom} -> "<Type: #{Atom.to_string(atom)}>"
+      {:boolean, value} -> "<Bool: #{value}>"
       _ ->
         IO.inspect(root, label: "Got unknown token type")
         "<Unknown?>"
@@ -130,9 +135,9 @@ defmodule Benplusplus.Parser do
     case current_token do
       {:number, value} ->
         { Benplusplus.Node.construct_number(String.to_integer(value)), tl(token_stream) }
-      {:true, _value} ->
+      {:true_literal, _value} ->
         { Benplusplus.Node.construct_bool(true), tl(token_stream) }
-      {:false, _value} ->
+      {:false_literal, _value} ->
         { Benplusplus.Node.construct_bool(false), tl(token_stream) }
       {:identifier, value} ->
         { Benplusplus.Node.construct_variable(value), tl(token_stream) }
@@ -145,8 +150,13 @@ defmodule Benplusplus.Parser do
         # Advance past the right curly
         token_stream = eat(token_stream, :right_curly)
         # Return inner expression
-        { inner, token_stream, }
-      _ -> error("Expected number or variable in parser, got: #{elem(current_token, 0)}")
+        { inner, token_stream }
+      {:minus, _value} ->
+        token_stream = eat(token_stream, :minus)
+        { inner, token_stream } = expression(token_stream)
+
+        {Benplusplus.Node.construct_unary_operation(inner, :minus), token_stream}
+      _ -> error("Expected lvalue in parser, got: #{elem(current_token, 0)}")
     end
   end
 
@@ -168,6 +178,34 @@ defmodule Benplusplus.Parser do
       [] -> { lhs, token_stream }
       [{op_type, op_value} | token_stream] ->
         case precedence_level do
+          :equal ->
+            case op_type do
+              :equal ->
+                {rhs, token_stream} = expression(token_stream, higher_precedence(precedence_level))
+                {Benplusplus.Node.construct_binary_operation(lhs, rhs, :equal), token_stream}
+                _ -> {lhs, [{op_type, op_value} | token_stream]}
+            end
+          :or ->
+            case op_type do
+              :or ->
+                {rhs, token_stream} = expression(token_stream, higher_precedence(precedence_level))
+                {Benplusplus.Node.construct_binary_operation(lhs, rhs, :or), token_stream}
+                _ -> {lhs, [{op_type, op_value} | token_stream]}
+            end
+          :and ->
+            case op_type do
+              :and ->
+                {rhs, token_stream} = expression(token_stream, higher_precedence(precedence_level))
+                {Benplusplus.Node.construct_binary_operation(lhs, rhs, :and), token_stream}
+                _ -> {lhs, [{op_type, op_value} | token_stream]}
+            end
+          :not ->
+            case op_type do
+              :not ->
+                {rhs, token_stream} = expression(token_stream, higher_precedence(precedence_level))
+                {Benplusplus.Node.construct_unary_operation(rhs, :not), token_stream}
+              _ -> {lhs, [{op_type, op_value} | token_stream]}
+            end
           :add_sub ->
             cond do
               op_type in [:plus, :minus] ->

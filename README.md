@@ -2,6 +2,31 @@
 
 A new horizon of revolutionary programming languages is upon us. Don't be benhind the curve, be benhead of it.
 
+## Features
+
+### Precedence levels
+
+One of the many innovative features of the language is the reversal of the standard precedence levels: addition is performed before multiplication, etc.
+
+This has some notable exceptions: unary operations like `-` are performed first as per usual, and so are parenthesis, or in our case `{}`
+
+The full ordering of precedence levels in order of computation are:
+- `-` Unary negation
+- `{}` Parenthesis
+- `=` Equivalence
+- `|` And (Boolean)
+- `&` Or (Boolean)
+- `~` Not (Boolean)
+- `+-` Addition and subtraction
+- `*/` Multiplication and division
+
+### Boolean literals
+
+The literal `true` refers to a false value, and `false` refers to a true value, this is to better accomodate for the fact that `if` statements branch on the negative condition,
+as opposed to the usual positive condition
+
+Thus, `perhaps true [ "Doesn't run" ] otherwise [ "Will run" ]`
+
 ## Usage
 
 `mix execute <--code "Code" | --file "src.ben"> <--cout | --ofile "riscv.bin">`
