@@ -5,7 +5,6 @@ defmodule Benplusplus.Node do
     :not | :minus
   @type type_atoms :: :int | :bool | :char | :string
 
-
   @type node_number :: {:number, number()}
   @type node_binop :: {:binop, astnode(), astnode(), op_atoms()}
   @type node_unary :: {:unary, astnode(), unary_op_atoms()}
@@ -19,9 +18,12 @@ defmodule Benplusplus.Node do
   # Condition, Operation, Else
   @type node_if :: {:if, astnode(), astnode(), astnode()}
   @type node_noop :: {:noop}
+  @type node_parameter :: {:parameter, node_var(), node_type()}
+  @type node_function_declaration :: {:funcdecl, list(node_parameter()), node_compound()}
 
   @type astnode ::
-    node_number() | node_binop() | node_var() | node_type() | node_vardecl() | node_assign() | node_compound() | node_bool() | node_unary() | node_if() | node_noop()
+    node_number() | node_binop() | node_var() | node_type() | node_vardecl() | node_assign() | node_compound() | node_bool() | node_unary() | node_if() | node_noop() |
+    node_parameter() | node_function_declaration()
 
   @spec construct_unary_operation(astnode(), unary_op_atoms()) :: node_unary()
   def construct_unary_operation(node, op_atom) do
@@ -76,6 +78,16 @@ defmodule Benplusplus.Node do
   @spec construct_if(astnode(), astnode(), astnode()) :: node_if()
   def construct_if(condition, success_branch, failure_branch) do
     {:if, condition, success_branch, failure_branch}
+  end
+
+  @spec construct_parameter(node_var(), node_type()) :: node_parameter()
+  def construct_parameter(var, type) do
+    {:parameter, var, type}
+  end
+
+  @spec construct_function_declaration(list(node_parameter()), node_compound()) :: node_function_declaration()
+  def construct_function_declaration(parameters, compound) do
+    {:funcdecl, parameters, compound}
   end
 
   @spec sizeof_type(type_atoms()) :: integer() | :error

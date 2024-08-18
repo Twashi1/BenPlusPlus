@@ -6,17 +6,15 @@ A new horizon of revolutionary programming languages is upon us. Don't be benhin
 
 ### Precedence levels
 
-One of the many innovative features of the language is the reversal of the standard precedence levels: addition is performed before multiplication, etc.
-
-This has some notable exceptions: unary operations like `-` are performed first as per usual, and so are parenthesis, or in our case `{}`
+One of the many innovative features of the language is the reversal of most of the standard precedence levels: addition is performed before multiplication, etc.
 
 The full ordering of precedence levels in order of computation are:
-- `-` Unary negation
 - `{}` Parenthesis
-- `=` Equivalence
-- `|` And (Boolean)
+- `-` Unary negation
 - `&` Or (Boolean)
+- `|` And (Boolean)
 - `~` Not (Boolean)
+- `=`, `>`, `<`, `=>`, `=<` Comparison operators (`>`: Less than, `<`: More than)
 - `+-` Addition and subtraction
 - `*/` Multiplication and division
 

@@ -15,7 +15,7 @@ defmodule Benplusplus.Parser do
   """
   @typenames %{"int" => :int, "string" => :string, "bool" => :bool, "char" => :char}
 
-  @type precedence() :: :value | :equal | :and | :or | :not | :add_sub | :multiply_divide | :expression
+  @type precedence() :: :value | :comparison | :and | :or | :not | :add_sub | :multiply_divide | :expression
 
   @spec error(String.t()) :: no_return()
   defp error(message) do
@@ -25,11 +25,11 @@ defmodule Benplusplus.Parser do
   @spec higher_precedence(precedence()) :: precedence()
   defp higher_precedence(precedence_level) do
     case precedence_level do
-      :equal -> :value
-      :and -> :equal
-      :or -> :and
-      :not -> :or
-      :add_sub -> :not
+      :or -> :value
+      :and -> :or
+      :not -> :and
+      :comparison -> :not
+      :add_sub -> :comparison
       :multiply_divide -> :add_sub
       :expression -> :multiply_divide
     end
@@ -42,14 +42,14 @@ defmodule Benplusplus.Parser do
     root
   end
 
-  @spec pretty_print_statements(list(Benplusplus.Node.astnode())) :: String.t()
-  def pretty_print_statements(statements) do
+  @spec pretty_print_list(list(Benplusplus.Node.astnode())) :: String.t()
+  def pretty_print_list(statements) do
     case statements do
       [] -> ""
       [head | tail] ->
         case tail do
           [] -> "#{pretty_print_node(head)}"
-          _ -> "#{pretty_print_node(head)}, #{pretty_print_statements(tail)}"
+          _ -> "#{pretty_print_node(head)}, #{pretty_print_list(tail)}"
         end
     end
   end
@@ -62,10 +62,11 @@ defmodule Benplusplus.Parser do
       {:var, name} -> "<Var: #{name}>"
       {:vardecl, type, identifier, expression} -> "<Declaration(#{pretty_print_node(type)}): var: #{pretty_print_node(identifier)}, val: #{pretty_print_node(expression)}>"
       {:assign, var, rhs} -> "<Assign, var: #{pretty_print_node(var)}, val: #{pretty_print_node(rhs)}>"
-      {:compound, nodes} -> "<Compound, values: [#{pretty_print_statements(nodes)}]>"
+      {:compound, nodes} -> "<Compound, values: [#{pretty_print_list(nodes)}]>"
       {:type, atom} -> "<Type: #{Atom.to_string(atom)}>"
       {:boolean, value} -> "<Bool: #{value}>"
       {:if, condition, success_branch, failure_branch} -> "<If(#{pretty_print_node(condition)}), Success: #{pretty_print_node(success_branch)}, Failure: #{pretty_print_node(failure_branch)}>"
+      {:funcdecl, parameters, compound} -> "<FuncDecl(#{pretty_print_list(nodes)})>"
       _ ->
         IO.inspect(root, label: "Got unknown token type")
         "<Unknown?>"
@@ -219,12 +220,12 @@ defmodule Benplusplus.Parser do
       [] -> { lhs, token_stream }
       [{op_type, op_value} | token_stream] ->
         case precedence_level do
-          :equal ->
-            case op_type do
-              :equal ->
+          :comparison ->
+            cond do
+              op_type in [:equal, :less_than, :more_than, :less_eq, :more_eq] ->
                 {rhs, token_stream} = expression(token_stream, higher_precedence(precedence_level))
-                {Benplusplus.Node.construct_binary_operation(lhs, rhs, :equal), token_stream}
-                _ -> {lhs, [{op_type, op_value} | token_stream]}
+                {Benplusplus.Node.construct_binary_operation(lhs, rhs, op_type), token_stream}
+              true -> {lhs, [{op_type, op_value} | token_stream]}
             end
           :or ->
             case op_type do

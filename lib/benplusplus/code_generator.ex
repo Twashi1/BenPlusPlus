@@ -72,6 +72,7 @@ defmodule Benplusplus.Codegenerator do
     case root do
       # We only care about the current stack frame
       {:compound, _statements} -> 0
+      {:noop} -> 0
       {:number, _value} -> Benplusplus.Node.sizeof_type(:int)
       {:boolean, _value} -> Benplusplus.Node.sizeof_type(:bool)
       {:binop, left, right, _op_atom} ->
@@ -226,6 +227,10 @@ defmodule Benplusplus.Codegenerator do
       :multiply -> ["mul t0, t0, t1"]
       :divide -> ["div t0, t0, t1"]
       :equal -> ["xor t0, t0, t1", "slti t0, t0, 1"]
+      :less_than -> ["slt t0, t0, t1"]
+      :more_than -> ["slt t0, t1, t0"]
+      :more_eq -> ["slt t0, t0, t1", "slti t0, t0, 1"]
+      :less_eq -> ["slt t0, t1, t0", "slti t0, t0, 1"]
       :and -> ["and t0, t0, t1"]
       :or -> ["or t0, t0, t1"]
       _ -> raise("Expected mathematical operator +-*/, got #{op_atom}")
@@ -251,7 +256,7 @@ defmodule Benplusplus.Codegenerator do
 
     operation_code = case op_atom do
       :minus -> ["sub t0, zero, t0"]
-      :not -> ["xori t0, t0, -1"]
+      :not -> ["slti t0, t0, 1"]
     end
 
     # Load value to t0
@@ -274,7 +279,7 @@ defmodule Benplusplus.Codegenerator do
     # "Modify" current frame's arena pointer
     new_frame = %StackFrame{current_frame | arena_pointer: current_frame.arena_pointer + diff}
     # Add new frame back and return
-    %Context{stack_frames: [new_frame | tail_frames]}
+    %Context{context | stack_frames: [new_frame | tail_frames]}
   end
 
   # Get location of variable taking into account current stack frames

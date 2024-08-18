@@ -1,7 +1,4 @@
 ## Core
-- Compound parsing should expect an opening `[` and closing `]`
-  - Modify parser to adjust for this
-  - Modify `parse` function to ignore the opening `[` and closing `]` for a given program
 
 ## Language features
 - Data types
@@ -13,9 +10,6 @@
     - String indexing
   - Lists
     - Indexing
-- Control flow
-  - Boolean logic
-  - If/Else If/Else blocks
 - Loops
   - While loop
   - For range loop (syntatic sugar, just a while loop) 

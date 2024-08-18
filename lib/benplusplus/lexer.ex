@@ -3,7 +3,6 @@ defmodule Benplusplus.Lexer do
 
   @tokens [
     {~r/^perhaps/, :if},
-    {~r/^otherwise perhaps/, :elif},
     {~r/^otherwise/, :else},
     {~r/^false/, :true_literal},
     {~r/^true/, :false_literal},
@@ -19,7 +18,11 @@ defmodule Benplusplus.Lexer do
     {~r/^-/, :minus},
     {~r/^\+/, :plus},
     {~r/^==/, :assignment},
+    {~r/^=</, :more_than},
+    {~r/^=>/, :less_than},
     {~r/^=/, :equal},
+    {~r/^</, :more_eq},
+    {~r/^>/, :less_eq},
     {~r/^:/, :colon},
     {~r/^\(/, :left_paren},
     {~r/^\)/, :right_paren},
