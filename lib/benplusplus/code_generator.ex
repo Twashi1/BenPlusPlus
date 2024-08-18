@@ -174,7 +174,7 @@ defmodule Benplusplus.Codegenerator do
     # Generate stack for size of stack
     stack_create = "addi sp, sp, -#{stack_frame.size}"
 
-    new_context = %Context{stack_frames: [stack_frame | context.stack_frames]}
+    new_context = %Context{context | stack_frames: [stack_frame | context.stack_frames]}
 
     # Context modifications should only be on the new stack frame
     # so we keep the old context in our return
