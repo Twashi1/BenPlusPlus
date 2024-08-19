@@ -11,10 +11,10 @@ perhaps a =< 5 [
 
 ] otherwise perhaps a = 3 [
 
-]
+]:
 
-benchen fibenacci{first == int, second == int, third == int} [
+function fibenacci{first == int, second == int, third == int} == int [
+    first:
+]:
 
-]
-
-<1, 2, 3>fibenacci:
+<1, 2, 3/>fibenacci:

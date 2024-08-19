@@ -17,13 +17,16 @@ defmodule Benplusplus.Node do
   @type node_bool :: {:boolean, boolean()}
   # Condition, Operation, Else
   @type node_if :: {:if, astnode(), astnode(), astnode()}
-  @type node_noop :: {:noop}
+
   @type node_parameter :: {:parameter, node_var(), node_type()}
-  @type node_function_declaration :: {:funcdecl, list(node_parameter()), node_compound()}
+  @type node_function_declaration :: {:funcdecl, String.t(), list(node_parameter()), node_type(), node_compound()}
+  @type node_function_call :: {:funccall, String.t(), list(astnode())}
+
+  @type node_noop :: {:noop}
 
   @type astnode ::
     node_number() | node_binop() | node_var() | node_type() | node_vardecl() | node_assign() | node_compound() | node_bool() | node_unary() | node_if() | node_noop() |
-    node_parameter() | node_function_declaration()
+    node_parameter() | node_function_declaration() | node_function_call()
 
   @spec construct_unary_operation(astnode(), unary_op_atoms()) :: node_unary()
   def construct_unary_operation(node, op_atom) do
@@ -85,9 +88,14 @@ defmodule Benplusplus.Node do
     {:parameter, var, type}
   end
 
-  @spec construct_function_declaration(list(node_parameter()), node_compound()) :: node_function_declaration()
-  def construct_function_declaration(parameters, compound) do
-    {:funcdecl, parameters, compound}
+  @spec construct_function_declaration(String.t(), list(node_parameter()), node_type(), node_compound()) :: node_function_declaration()
+  def construct_function_declaration(name, parameters, return_type, compound) do
+    {:funcdecl, name, parameters, return_type, compound}
+  end
+
+  @spec construct_function_call(String.t(), list(astnode())) :: node_function_call()
+  def construct_function_call(name, arguments) do
+    {:funccall, name, arguments}
   end
 
   @spec sizeof_type(type_atoms()) :: integer() | :error

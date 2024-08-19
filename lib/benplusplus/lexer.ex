@@ -4,6 +4,7 @@ defmodule Benplusplus.Lexer do
   @tokens [
     {~r/^perhaps/, :if},
     {~r/^otherwise/, :else},
+    {~r/^function/, :function},
     {~r/^false/, :true_literal},
     {~r/^true/, :false_literal},
     # TODO: easier way of doing this? ^(int|char|bool|string) didn't work, was matching multiple things I think
@@ -13,6 +14,7 @@ defmodule Benplusplus.Lexer do
     {~r/^string/, :typename},
     {~r/^[a-zA-Z_][a-zA-Z0-9_]*/, :identifier},
     {~r/^[0-9]+/, :number},
+    {~r/^\/>/, :closing_angle_bracket},
     {~r/^\*/, :multiply},
     {~r/^\//, :divide},
     {~r/^-/, :minus},
@@ -33,6 +35,7 @@ defmodule Benplusplus.Lexer do
     {~r/^\|/, :and},
     {~r/^&/, :or},
     {~r/^~/, :not},
+    {~r/^,/, :comma},
     {~r/^[ \t\r\n]+/, :whitespace},
   ]
 

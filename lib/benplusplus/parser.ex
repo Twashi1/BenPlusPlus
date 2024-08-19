@@ -66,8 +66,10 @@ defmodule Benplusplus.Parser do
       {:type, atom} -> "<Type: #{Atom.to_string(atom)}>"
       {:boolean, value} -> "<Bool: #{value}>"
       {:parameter, var, type} -> "<Param: #{pretty_print_node(var)} == #{pretty_print_node(type)}>"
+      {:argument, expr} -> "<Arg: #{pretty_print_node(expr)}>"
       {:if, condition, success_branch, failure_branch} -> "<If(#{pretty_print_node(condition)}), Success: #{pretty_print_node(success_branch)}, Failure: #{pretty_print_node(failure_branch)}>"
-      {:funcdecl, parameters, compound} -> "<FuncDecl(#{pretty_print_list(parameters)}): #{pretty_print_node(compound)}>"
+      {:funcdecl, name, parameters, return_type, compound} -> "<FuncDecl: #{name}(#{pretty_print_list(parameters)}) -> (#{pretty_print_node(return_type)}): #{pretty_print_node(compound)}>"
+      {:funccall, name, arguments} -> "<FuncCall: #{name}(#{pretty_print_list(arguments)})>"
       _ ->
         IO.inspect(root, label: "Got unknown token type")
         "<Unknown?>"
@@ -130,6 +132,117 @@ defmodule Benplusplus.Parser do
     end
   end
 
+  @spec parse_parameter_list(list(Benplusplus.Lexer.token())) :: {list(Benplusplus.Node.node_parameter()), list(Benplusplus.Lexer.token())}
+  defp parse_parameter_list(token_stream) do
+    {parameter, token_stream} = case token_stream do
+      [] -> error("Expected closing bracket or parameter in parameter list")
+      [{:right_curly, _value} | _tail] ->
+        {:nil, token_stream}
+      _ ->
+        {{:identifier, var_name}, token_stream} = match(token_stream, :identifier)
+        token_stream = eat(token_stream, :assignment)
+        {{:typename, type_name}, token_stream} = match(token_stream, :typename)
+
+        type_atom = case @typenames[type_name] do
+          :nil -> error("Couldn't convert typename #{type_name}")
+          type_atom -> type_atom
+        end
+
+        {Benplusplus.Node.construct_parameter(Benplusplus.Node.construct_variable(var_name), Benplusplus.Node.construct_type(type_atom)), token_stream}
+    end
+
+    case parameter do
+      :nil -> {[], token_stream}
+      _ ->
+        case token_stream do
+          [] -> error("Expected closing bracket or comma in parameter list")
+          [token | _tail] ->
+            case token do
+              {:comma, _value} ->
+                token_stream = eat(token_stream, :comma)
+                {parameters, token_stream} = parse_parameter_list(token_stream)
+                {[parameter | parameters], token_stream}
+              _ -> {[parameter], token_stream}
+            end
+        end
+    end
+  end
+
+  # TODO: use this function in more places
+  @spec parse_type(list(Benplusplus.Lexer.token())) :: {Benplusplus.Node.node_type(), list(Benplusplus.Lexer.token())}
+  defp parse_type(token_stream) do
+    {{:typename, token_value}, token_stream} = match(token_stream, :typename)
+
+    type_atom = @typenames[token_value]
+
+    case type_atom do
+      :nil -> error("Forgot to add typename #{token_value} to the @typenames module attribute")
+      _ -> { Benplusplus.Node.construct_type(type_atom), token_stream }
+    end
+  end
+
+  @spec parse_function(list(Benplusplus.Lexer.token())) :: {Benplusplus.Node.node_function_declaration(), list(Benplusplus.Lexer.token())}
+  defp parse_function(token_stream) do
+    token_stream = eat(token_stream, :function)
+
+    {{:identifier, name}, token_stream} = match(token_stream, :identifier)
+
+    token_stream = eat(token_stream, :left_curly)
+
+    {parameters, token_stream} = parse_parameter_list(token_stream)
+
+    token_stream = eat(token_stream, :right_curly)
+
+    token_stream = eat(token_stream, :assignment)
+
+    {return_type, token_stream} = parse_type(token_stream)
+
+    {code, token_stream} = parse_compound(token_stream)
+
+    {Benplusplus.Node.construct_function_declaration(name, parameters, return_type, code), token_stream}
+  end
+
+  @spec parse_argument_list(list(Benplusplus.Lexer.token())) :: {list(Benplusplus.Node.astnode()), list(Benplusplus.Lexer.token())}
+  defp parse_argument_list(token_stream) do
+    # TODO: simplify
+    {argument, token_stream} = case token_stream do
+      [] -> error("Expected closing bracket or argument in argument list")
+      [{:closing_angle_bracket, _value} | _tail] ->
+        {:nil, token_stream}
+      _ ->
+        expression(token_stream)
+    end
+
+    case argument do
+      :nil -> {[], token_stream}
+      _ ->
+        case token_stream do
+          [] -> error("Expected closing bracket or comma in argument list")
+          [token | _tail] ->
+            case token do
+              {:comma, _value} ->
+                token_stream = eat(token_stream, :comma)
+                {arguments, token_stream} = parse_argument_list(token_stream)
+                {[argument | arguments], token_stream}
+              _ -> {[argument], token_stream}
+            end
+        end
+    end
+  end
+
+  @spec parse_function_call(list(Benplusplus.Lexer.token())) :: {Benplusplus.Node.node_function_call(), list(Benplusplus.Lexer.token())}
+  defp parse_function_call(token_stream) do
+    token_stream = eat(token_stream, :more_eq)
+
+    {arguments, token_stream} = parse_argument_list(token_stream)
+
+    token_stream = eat(token_stream, :closing_angle_bracket)
+
+    {{:identifier, function_name}, token_stream} = match(token_stream, :identifier)
+
+    {Benplusplus.Node.construct_function_call(function_name, arguments), token_stream}
+  end
+
   @spec statement(list(Benplusplus.Lexer.token())) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token())}
   defp statement(token_stream) do
     [current_token | token_stream] = token_stream
@@ -137,6 +250,10 @@ defmodule Benplusplus.Parser do
     case current_token do
       {:if, _value} ->
         parse_if([current_token | token_stream])
+      {:function, _value} ->
+        parse_function([current_token | token_stream])
+      {:more_eq, _value} ->
+        parse_function_call([current_token | token_stream])
       {:identifier, value} ->
         var_node = Benplusplus.Node.construct_variable(value)
 
@@ -167,7 +284,7 @@ defmodule Benplusplus.Parser do
         end
       {:left_square, _value} ->
         parse_compound([current_token | token_stream])
-      _ -> error("Expected identifier when parsing statement")
+      _ -> expression([current_token | token_stream])
     end
   end
 
@@ -199,6 +316,8 @@ defmodule Benplusplus.Parser do
         { inner, token_stream } = expression(token_stream)
 
         {Benplusplus.Node.construct_unary_operation(inner, :minus), token_stream}
+      {:more_eq, _value} ->
+        parse_function_call(token_stream)
       _ -> error("Expected lvalue in parser, got: #{elem(current_token, 0)}")
     end
   end
@@ -276,7 +395,15 @@ defmodule Benplusplus.Parser do
   defp eat(token_stream, token_type) do
     case token_stream do
       [] -> error("Expected token #{token_type} but got end of file")
-      [current_token | tail] -> if elem(current_token, 0) == token_type, do: tail, else: error("Expected token <#{token_type}> got token #{elem(current_token, 0)} from stream #{Benplusplus.Lexer.pretty_print_tokens(token_stream)}")
+      [current_token | tail] -> if elem(current_token, 0) == token_type, do: tail, else: error("[Eat] Expected token <#{token_type}> got token #{elem(current_token, 0)} from stream #{Benplusplus.Lexer.pretty_print_tokens(token_stream)}")
+    end
+  end
+
+  @spec eat(list(Benplusplus.Lexer.token()), atom()) :: {Benplusplus.Lexer.token(), list(Benplusplus.Lexer.token())}
+  defp match(token_stream, token_type) do
+    case token_stream do
+      [] -> error("Expected token #{token_type} but got end of file")
+      [current_token | tail] -> if elem(current_token, 0) == token_type, do: {current_token, tail}, else: error("[Match] Expected token <#{token_type}> got token #{elem(current_token, 0)} from stream #{Benplusplus.Lexer.pretty_print_tokens(token_stream)}")
     end
   end
 end
