@@ -65,8 +65,9 @@ defmodule Benplusplus.Parser do
       {:compound, nodes} -> "<Compound, values: [#{pretty_print_list(nodes)}]>"
       {:type, atom} -> "<Type: #{Atom.to_string(atom)}>"
       {:boolean, value} -> "<Bool: #{value}>"
+      {:parameter, var, type} -> "<Param: #{pretty_print_node(var)} == #{pretty_print_node(type)}>"
       {:if, condition, success_branch, failure_branch} -> "<If(#{pretty_print_node(condition)}), Success: #{pretty_print_node(success_branch)}, Failure: #{pretty_print_node(failure_branch)}>"
-      {:funcdecl, parameters, compound} -> "<FuncDecl(#{pretty_print_list(nodes)})>"
+      {:funcdecl, parameters, compound} -> "<FuncDecl(#{pretty_print_list(parameters)}): #{pretty_print_node(compound)}>"
       _ ->
         IO.inspect(root, label: "Got unknown token type")
         "<Unknown?>"
