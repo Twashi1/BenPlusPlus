@@ -257,29 +257,36 @@ defmodule Benplusplus.Parser do
       {:identifier, value} ->
         var_node = Benplusplus.Node.construct_variable(value)
 
-        # Eat assignment token
-        token_stream = eat(token_stream, :assignment)
-
         case token_stream do
-          [] -> error("Expected type or expression after assignment")
+          [] -> error("Unexpected end of token stream")
           [{token_type, token_value} | token_stream] ->
             case token_type do
-              # Construct variable declaration
-              :typename ->
-                type_atom = @typenames[token_value]
+              :assignment ->
+                case token_stream do
+                  [] -> error("Expected type or expression after assignment")
+                  [{token_type, token_value} | token_stream] ->
+                    case token_type do
+                      # Construct variable declaration
+                      :typename ->
+                        type_atom = @typenames[token_value]
 
-                case type_atom do
-                  :nil -> error("Forgot to add typename #{token_value} to the @typenames module attribute")
-                  _ ->
-                    token_stream = eat(token_stream, :assignment)
-                    {rhs, token_stream } = expression(token_stream, :expression)
-                    { Benplusplus.Node.construct_variable_declaration(Benplusplus.Node.construct_type(type_atom), var_node, rhs), token_stream }
+                        case type_atom do
+                          :nil -> error("Forgot to add typename #{token_value} to the @typenames module attribute")
+                          _ ->
+                            token_stream = eat(token_stream, :assignment)
+                            {rhs, token_stream } = expression(token_stream)
+                            { Benplusplus.Node.construct_variable_declaration(Benplusplus.Node.construct_type(type_atom), var_node, rhs), token_stream }
+                        end
+                      # Construct assignment
+                      _ ->
+                        token_stream = [{token_type, token_value} | token_stream]
+                        {rhs, token_stream } = expression(token_stream)
+                        { Benplusplus.Node.construct_assignment(var_node, rhs), token_stream }
+                    end
                 end
-              # Construct assignment
               _ ->
-                token_stream = [{token_type, token_value} | token_stream]
-                {rhs, token_stream } = expression(token_stream, :expression)
-                { Benplusplus.Node.construct_assignment(var_node, rhs), token_stream }
+                # TODO: yuck
+                expression([{:identifier, value} | [{token_type, token_value} | token_stream]])
             end
         end
       {:left_square, _value} ->
@@ -324,69 +331,83 @@ defmodule Benplusplus.Parser do
 
   @spec expression(list(Benplusplus.Lexer.token())) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token())}
   def expression(token_stream) do
-    expression(token_stream, :expression)
+    {expr, token_stream, _success} = expression(token_stream, :expression)
+
+    {expr, token_stream}
   end
 
-  @spec expression(list(Benplusplus.Lexer.token()), :value) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token())}
+  @spec expression(list(Benplusplus.Lexer.token()), :value) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token()), boolean()}
   defp expression(token_stream, :value) do
-    precedence_value(token_stream)
+    {value, token_stream} = precedence_value(token_stream)
+
+    {value, token_stream, true}
   end
 
-  @spec expression(list(Benplusplus.Lexer.token()), precedence()) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token())}
+  @spec expression(list(Benplusplus.Lexer.token()), precedence()) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token()), boolean()}
   defp expression(token_stream, precedence_level) do
-    { lhs, token_stream } = expression(token_stream, higher_precedence(precedence_level))
+    { lhs, token_stream, _success } = expression(token_stream, higher_precedence(precedence_level))
 
-    case token_stream do
+    expression(token_stream, precedence_level, lhs)
+  end
+
+  @spec expression(list(Benplusplus.Lexer.token()), precedence(), Benplusplus.Node.astnode()) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token()), boolean()}
+  defp expression(token_stream, precedence_level, lhs) do
+    {lhs, token_stream, success} = case token_stream do
       [] -> { lhs, token_stream }
       [{op_type, op_value} | token_stream] ->
         case precedence_level do
           :comparison ->
             cond do
               op_type in [:equal, :less_than, :more_than, :less_eq, :more_eq] ->
-                {rhs, token_stream} = expression(token_stream, higher_precedence(precedence_level))
-                {Benplusplus.Node.construct_binary_operation(lhs, rhs, op_type), token_stream}
-              true -> {lhs, [{op_type, op_value} | token_stream]}
+                {rhs, token_stream, _success} = expression(token_stream, higher_precedence(precedence_level))
+                {Benplusplus.Node.construct_binary_operation(lhs, rhs, op_type), token_stream, true}
+              true -> {lhs, [{op_type, op_value} | token_stream], false}
             end
           :or ->
             case op_type do
               :or ->
-                {rhs, token_stream} = expression(token_stream, higher_precedence(precedence_level))
-                {Benplusplus.Node.construct_binary_operation(lhs, rhs, :or), token_stream}
-                _ -> {lhs, [{op_type, op_value} | token_stream]}
+                {rhs, token_stream, _success} = expression(token_stream, higher_precedence(precedence_level))
+                {Benplusplus.Node.construct_binary_operation(lhs, rhs, :or), token_stream, true}
+                _ -> {lhs, [{op_type, op_value} | token_stream], false}
             end
           :and ->
             case op_type do
               :and ->
-                {rhs, token_stream} = expression(token_stream, higher_precedence(precedence_level))
-                {Benplusplus.Node.construct_binary_operation(lhs, rhs, :and), token_stream}
-                _ -> {lhs, [{op_type, op_value} | token_stream]}
+                {rhs, token_stream, _success} = expression(token_stream, higher_precedence(precedence_level))
+                {Benplusplus.Node.construct_binary_operation(lhs, rhs, :and), token_stream, true}
+                _ -> {lhs, [{op_type, op_value} | token_stream], false}
             end
           :not ->
             case op_type do
               :not ->
-                {rhs, token_stream} = expression(token_stream, higher_precedence(precedence_level))
-                {Benplusplus.Node.construct_unary_operation(rhs, :not), token_stream}
-              _ -> {lhs, [{op_type, op_value} | token_stream]}
+                {rhs, token_stream, _success} = expression(token_stream, higher_precedence(precedence_level))
+                {Benplusplus.Node.construct_unary_operation(rhs, :not), token_stream, true}
+              _ -> {lhs, [{op_type, op_value} | token_stream], false}
             end
           :add_sub ->
             cond do
               op_type in [:plus, :minus] ->
-                { rhs, token_stream } = expression(token_stream, higher_precedence(precedence_level))
-                { Benplusplus.Node.construct_binary_operation(lhs, rhs, op_type), token_stream }
+                { rhs, token_stream, _success } = expression(token_stream, higher_precedence(precedence_level))
+                { Benplusplus.Node.construct_binary_operation(lhs, rhs, op_type), token_stream, true }
               # Add back operator
-              true -> { lhs, [{op_type, op_value} | token_stream] }
+              true -> { lhs, [{op_type, op_value} | token_stream], false }
             end
           :multiply_divide ->
             cond do
               op_type in [:multiply, :divide] ->
-                { rhs, token_stream } = expression(token_stream, higher_precedence(precedence_level))
-                { Benplusplus.Node.construct_binary_operation(lhs, rhs, op_type), token_stream }
+                { rhs, token_stream, _success } = expression(token_stream, higher_precedence(precedence_level))
+                { Benplusplus.Node.construct_binary_operation(lhs, rhs, op_type), token_stream, true }
               # Add back operator
-              true -> { lhs, [{op_type, op_value} | token_stream] }
+              true -> { lhs, [{op_type, op_value} | token_stream], false }
             end
           :expression ->
-            { lhs, [{op_type, op_value} | token_stream] }
+            { lhs, [{op_type, op_value} | token_stream], false }
         end
+    end
+
+    case success do
+      true -> expression(token_stream, precedence_level, lhs)
+      false -> {lhs, token_stream, false}
     end
   end
 
