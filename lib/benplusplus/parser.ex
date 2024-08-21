@@ -96,7 +96,6 @@ defmodule Benplusplus.Parser do
   defp parse_if(token_stream) do
     token_stream = eat(token_stream, :if)
     {condition, token_stream} = expression(token_stream)
-    IO.puts("Got condition: #{pretty_print_node(condition)}, with remaining stream: #{Benplusplus.Lexer.pretty_print_tokens(token_stream)}")
     {success_branch, token_stream} = parse_compound(token_stream)
 
     case token_stream do
@@ -243,6 +242,16 @@ defmodule Benplusplus.Parser do
     {Benplusplus.Node.construct_function_call(function_name, arguments), token_stream}
   end
 
+  @spec parse_while(list(Benplusplus.Lexer.token())) :: {Benplusplus.Node.node_while(), list(Benplusplus.Lexer.token())}
+  defp parse_while(token_stream) do
+    token_stream = eat(token_stream, :while)
+
+    {condition, token_stream} = expression(token_stream)
+    {body, token_stream} = parse_compound(token_stream)
+
+    {Benplusplus.Node.construct_while(condition, body), token_stream}
+  end
+
   @spec statement(list(Benplusplus.Lexer.token())) :: {Benplusplus.Node.astnode(), list(Benplusplus.Lexer.token())}
   defp statement(token_stream) do
     [current_token | token_stream] = token_stream
@@ -250,6 +259,8 @@ defmodule Benplusplus.Parser do
     case current_token do
       {:if, _value} ->
         parse_if([current_token | token_stream])
+      {:while, _value} ->
+        parse_while([current_token | token_stream])
       {:function, _value} ->
         parse_function([current_token | token_stream])
       {:more_eq, _value} ->

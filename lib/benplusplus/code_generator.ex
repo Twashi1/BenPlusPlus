@@ -73,6 +73,8 @@ defmodule Benplusplus.Codegenerator do
             create_scope([value], context, current_scope)
           {:if, condition, success_branch, failure_branch} ->
             create_scope([condition, success_branch, failure_branch], context, current_scope)
+          {:while, condition, body} ->
+            create_scope([condition, body], context, current_scope)
           {:funccall, name, _arguments} ->
             case get_function_symbol(name, [current_scope | context.scopes]) do
               :nil -> error("Couldn't find function #{name}")
@@ -97,7 +99,7 @@ defmodule Benplusplus.Codegenerator do
               :nil ->
                 size = Benplusplus.Node.sizeof_type(type_atom)
 
-                current_scope = %Scope{current_scope | stack_size: current_scope.stack_size + size, arena_pointer: current_scope.stack_size + size,
+                current_scope = %Scope{current_scope | stack_size: current_scope.stack_size + size, arena_pointer: current_scope.arena_pointer + size,
                   variable_map: Map.put(current_scope.variable_map, name,
                     %VarSymbol{location: current_scope.arena_pointer, type: type_atom}
                   )
@@ -148,6 +150,7 @@ defmodule Benplusplus.Codegenerator do
       {:if, condition, success_branch, failure_branch} -> generate_code_if(condition, success_branch, failure_branch, context)
       {:funcdecl, name, parameters, type, code} -> generate_code_funcdecl(name, parameters, code, type, context)
       {:funccall, name, arguments} -> generate_code_funccall(name, arguments, context)
+      {:while, condition, body} -> generate_code_while(condition, body, context)
       {:noop} -> {[], context}
       _ -> {["# Unrecognised/Invalid node: #{Benplusplus.Parser.pretty_print_node(ast_node)}"], context}
     end
@@ -284,6 +287,21 @@ defmodule Benplusplus.Codegenerator do
     {statement ++ write_stack, context}
   end
 
+  @spec generate_code_while(Benplusplus.Node.astnode(), Benplusplus.Node.astnode(), %Context{}) :: {list(String.t()), %Context{}}
+  defp generate_code_while(condition, body, context) do
+    start_label = "while#{context.label_id}start"
+    end_label = "while#{context.label_id}end"
+    context = increment_label(context)
+
+    {condition_code, context} = generate_code(condition, context)
+    {read_condition, context} = read_from_stack(context)
+
+    {body_code, body_context} = generate_code(body, context)
+    context = %Context{context | label_id: body_context.label_id}
+
+    {["#{start_label}:"] ++ condition_code ++ read_condition ++ ["slti t0, t0, t1", "beq t0, zero, #{end_label}"] ++ body_code ++ ["beq zero, zero, #{start_label}"] ++ ["#{end_label}:"], context}
+  end
+
   @spec generate_code_if(Benplusplus.Node.astnode(), Benplusplus.Node.astnode(), Benplusplus.Node.astnode(), %Context{}) :: {list(String.t()), %Context{}}
   defp generate_code_if(condition, success_branch, failure_branch, context) do
     # Expecting to get out some expression, maybe validate this?
@@ -293,10 +311,12 @@ defmodule Benplusplus.Codegenerator do
     context = increment_label(context)
 
     {condition_code, context} = generate_code(condition, context)
-    {success_branch, context} = generate_code(success_branch, context)
-    {failure_branch, context} = generate_code(failure_branch, context)
-
     {read_condition, context} = read_from_stack(context)
+
+    {success_branch, body_context} = generate_code(success_branch, context)
+    context = %Context{context | label_id: body_context.label_id}
+    {failure_branch, body_context} = generate_code(failure_branch, context)
+    context = %Context{context | label_id: body_context.label_id}
 
     {condition_code ++ read_condition ++ ["slti t0, t0, 1"] ++ ["bne t0, zero, #{positive_label}"] ++ ["#{negative_label}:"] ++ failure_branch ++ ["beq zero, zero, #{end_label}"] ++ ["#{positive_label}:"] ++ success_branch ++ ["#{end_label}:"], context}
   end

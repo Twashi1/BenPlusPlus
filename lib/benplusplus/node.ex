@@ -15,8 +15,10 @@ defmodule Benplusplus.Node do
   @typedoc "Integer represents the maximum stack size required for this scope"
   @type node_compound :: {:compound, list(astnode())}
   @type node_bool :: {:boolean, boolean()}
-  # Condition, Operation, Else
+  # Condition, Success branch, Failure branch
   @type node_if :: {:if, astnode(), astnode(), astnode()}
+  # Condition, Body
+  @type node_while :: {:while, astnode(), astnode()}
 
   @type node_parameter :: {:parameter, node_var(), node_type()}
   @type node_function_declaration :: {:funcdecl, String.t(), list(node_parameter()), node_type(), node_compound()}
@@ -26,7 +28,7 @@ defmodule Benplusplus.Node do
 
   @type astnode ::
     node_number() | node_binop() | node_var() | node_type() | node_vardecl() | node_assign() | node_compound() | node_bool() | node_unary() | node_if() | node_noop() |
-    node_parameter() | node_function_declaration() | node_function_call()
+    node_parameter() | node_function_declaration() | node_function_call() | node_while()
 
   @spec construct_unary_operation(astnode(), unary_op_atoms()) :: node_unary()
   def construct_unary_operation(node, op_atom) do
@@ -96,6 +98,11 @@ defmodule Benplusplus.Node do
   @spec construct_function_call(String.t(), list(astnode())) :: node_function_call()
   def construct_function_call(name, arguments) do
     {:funccall, name, arguments}
+  end
+
+  @spec construct_while(astnode(), astnode()) :: node_while()
+  def construct_while(condition, compound) do
+    {:while, condition, compound}
   end
 
   @spec sizeof_type(type_atoms()) :: integer() | :error

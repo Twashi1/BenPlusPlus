@@ -4,6 +4,7 @@ defmodule Benplusplus.Lexer do
   @tokens [
     {~r/^perhaps/, :if},
     {~r/^otherwise/, :else},
+    {~r/^during/, :while},
     {~r/^function/, :function},
     {~r/^false/, :true_literal},
     {~r/^true/, :false_literal},
