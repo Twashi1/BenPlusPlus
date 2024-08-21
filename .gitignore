@@ -27,3 +27,5 @@ benplusplus-*.tar
 
 .vscode/
 test.txt
+# Output files
+*.ben

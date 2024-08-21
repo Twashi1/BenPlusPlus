@@ -1,29 +1,4 @@
 defmodule Benplusplus.Codegenerator do
-  # When you call a function, it has to copy all the values passed into the relevant variable mappings
-  # When we see function declaration, we have to generate the function code, taking into account the size of the stack required for that function
-  # When visiting a function declaration, we simply create a new stack scope and visit the compound in a special way?
-  # We also register that function declaration in the current stack frame
-
-  # We call a function, we jump and link to register, first thing done in function is to save register value to stack
-  # we then perform function code, and last thing is to read value from stack, and jump to that value
-
-  # Completely re-do functions at this point, complete mess of hacks and garble of contexts
-  # In order to load data into a function, we require
-  #   - Compute arguments in the context they were declared
-  #   - Access those arguments outside the context they were declared (some offsetting of the stack pointer), and copying them into new context
-
-  # Upon declaration of any scope
-  # - Figure out number of variables within that scope, and their respective types
-  # - Figure out number of functions within that scope, and their respective (return) types
-  # - Find total amount of memory required by summing up
-  #   - Each declaration of a variable
-  #   - Number of lvalues (variables, function calls, literals)
-  #     - Attempt to figure out maximum amount required concurrently?
-
-  # To load data into a function without requiring excessive hacks
-  # We allocate stack space before the call, loading parameters is part of the call, not the function declaration
-  # We deallocate that space just after the call
-
   # Stores the current stack frames accessible, and the next available label id
   defmodule Context do
     defstruct scopes: [], label_id: 0
@@ -143,9 +118,9 @@ defmodule Benplusplus.Codegenerator do
               :nil ->
                 {:type, type_atom} = type
 
-                # TODO: 4 extra bytes for storing maximum temporary,
-                #     but this is pretty trash (storing more than 4 now, not sure why I need to)
-                internal_scope = allocate_parameters_in_scope(parameters, %Scope{stack_size: 8})
+                # TODO: unresolved stack causes issues that require extra memory
+                # Reserve space for special variable at 0(sp)
+                internal_scope = allocate_parameters_in_scope(parameters, %Scope{stack_size: 4, arena_pointer: 4})
 
                 {%Scope{current_scope | function_map: Map.put(current_scope.function_map, name, %FunctionSymbol{
                   assigned_label: context.label_id, scope: internal_scope, return_type: type_atom,
@@ -208,8 +183,9 @@ defmodule Benplusplus.Codegenerator do
 
         size = Benplusplus.Node.sizeof_type(type_atom)
 
+        # Multiply size by 2 to accomodate extra space for loading parameters
         scope = %Scope{scope |
-          stack_size: scope.stack_size + size,
+          stack_size: scope.stack_size + size * 2,
           arena_pointer: scope.arena_pointer + size,
           variable_map: Map.put(scope.variable_map, name, %VarSymbol{location: scope.arena_pointer, type: type_atom}),
         }
@@ -234,6 +210,7 @@ defmodule Benplusplus.Codegenerator do
         {argument_code, context} = generate_code(argument, context)
         # Read argument from stack, and write to variable in our current scope
         {read_argument, context} = read_from_stack(context)
+        # Add variables back into this context
         {write_argument, context} = write_variable(hd(parameters), context)
 
         {load_other_arguments, context} = generate_code_arguments(tail, tl(parameters), context)
@@ -262,7 +239,9 @@ defmodule Benplusplus.Codegenerator do
 
     context = %Context{context | label_id: function_context.label_id}
 
-    {create_stack ++ generated_code ++ jalr ++ destroy_stack, context}
+    {get_return_value, context} = write_to_stack(context)
+
+    {create_stack ++ generated_code ++ jalr ++ destroy_stack ++ get_return_value, context}
   end
 
   defp generate_code_funcdecl(name, _parameters, body, _return_type, context) do
@@ -272,14 +251,16 @@ defmodule Benplusplus.Codegenerator do
       function_symbol -> function_symbol
     end
 
-    function_context = %Context{context | scopes: [function_symbol.scope | context.scopes]}
-
-    # Save return address to current scope
-    {write_return, function_context} = write_to_stack(function_context)
+    # Save return address to 0(sp)
+    write_return = ["sw ra, 0(sp)"]
     # Generate statements
     {:compound, body_statements} = body
+    {function_scope, context} = create_scope(body_statements, context, function_symbol.scope)
+    function_context = %Context{context | scopes: [function_scope | context.scopes]}
     {statements_code, function_context} = generate_statement_list(body_statements, function_context)
-    # Jump to return address (TODO: offset or infinite loop?)
+    # Load return address into ra
+    load_return = ["lw ra, 0(sp)"]
+    # Jump to return address
     jump_return = ["jalr zero, 0(ra)"]
 
     skip_function = ["jal zero, fn#{function_symbol.assigned_label}end"]
@@ -288,7 +269,7 @@ defmodule Benplusplus.Codegenerator do
 
     context = %Context{context | label_id: function_context.label_id}
 
-    {skip_function ++ start_label ++ write_return ++ statements_code ++ jump_return ++ end_label, context}
+    {skip_function ++ start_label ++ write_return ++ statements_code ++ load_return ++ jump_return ++ end_label, context}
   end
 
   @spec generate_code_bool(:true | :false, %Context{}) :: {list(String.t()), %Context{}}
@@ -474,10 +455,7 @@ defmodule Benplusplus.Codegenerator do
   defp read_variable(var_name, context) do
     var_location = get_variable_location(var_name, context.scopes)
 
-    case var_location do
-      :nil -> error("Couldn't find variable #{var_name} in context")
-      _ -> {["lw t0, #{var_location}(sp)"], context}
-    end
+    {["lw t0, #{var_location}(sp)"], context}
   end
 
   # Write value from register t0 into variable
@@ -485,10 +463,7 @@ defmodule Benplusplus.Codegenerator do
   defp write_variable(var_name, context) do
     var_location = get_variable_location(var_name, context.scopes)
 
-    case var_location do
-      :nil -> error("Couldn't find variable #{var_name} in context")
-      _ -> {["sw t0, #{var_location}(sp)"], context}
-    end
+    {["sw t0, #{var_location}(sp)"], context}
   end
 
   # Write value of register t0 to stack

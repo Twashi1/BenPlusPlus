@@ -5,9 +5,11 @@
   - Check variables aren't being redeclared
   - Checking size required for each scope
 - Stop using `mv` and various other pseudo-instructions where possible
-- Fix requirement for excess stack memory in function declaration, or at least formalise it
-  - Extraneous memory usage might be linked to expressions which aren't released from arena when out of use?
-- Don't save to `ra`, instead save to `0(sp)` and modify all function scopes to account for that special address
+- Using excessive stack memory, each statement should be counted for required stack space, and then we simply
+    take the maximum of all statements in a statement list
+- Function arguments are not working perfectly:
+  - Calculation of arguments takes place inside the callee's stack, instead of the caller, thus variables in the callee that share the same name as
+    parameters in the caller are not evaluted correctly
 
 ## Language features
 - Output?

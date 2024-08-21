@@ -14,7 +14,7 @@ The full ordering of precedence levels in order of computation are:
 - `&` Or (Boolean)
 - `|` And (Boolean)
 - `~` Not (Boolean)
-- `=`, `>`, `<`, `=>`, `=<` Comparison operators (`>`: Less than, `<`: More than)
+- `=`, `>`, `<`, `=>`, `=<` Comparison operators (`>`: Less than equal, `<`: More than equal)
 - `+-` Addition and subtraction
 - `*/` Multiplication and division
 
