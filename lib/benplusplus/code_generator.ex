@@ -299,7 +299,7 @@ defmodule Benplusplus.Codegenerator do
     {body_code, body_context} = generate_code(body, context)
     context = %Context{context | label_id: body_context.label_id}
 
-    {["#{start_label}:"] ++ condition_code ++ read_condition ++ ["slti t0, t0, t1", "beq t0, zero, #{end_label}"] ++ body_code ++ ["beq zero, zero, #{start_label}"] ++ ["#{end_label}:"], context}
+    {["#{start_label}:"] ++ condition_code ++ read_condition ++ ["slti t0, t0, 1", "beq t0, zero, #{end_label}"] ++ body_code ++ ["beq zero, zero, #{start_label}"] ++ ["#{end_label}:"], context}
   end
 
   @spec generate_code_if(Benplusplus.Node.astnode(), Benplusplus.Node.astnode(), Benplusplus.Node.astnode(), %Context{}) :: {list(String.t()), %Context{}}
