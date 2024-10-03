@@ -22,9 +22,6 @@
     - String indexing
   - Lists
     - Indexing
-- Loops
-  - While loop
-  - For range loop (syntatic sugar, just a while loop)
 - Clear function returns
 
 ## Large/aspirational features
